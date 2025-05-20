@@ -41,6 +41,7 @@ def draw_detections(image, detections, model):
     """Draw bounding boxes and labels on the image."""
     draw = ImageDraw.Draw(image)
     try:
+        # Load a custom font for better visualization
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
     except IOError:
         font = ImageFont.load_default()
@@ -52,6 +53,8 @@ def draw_detections(image, detections, model):
                     "olive", "apricot", "navy", "grey", "white", "black"]
     class_list = model.config.id2label.values()
     class_colors = {class_name: colors[i % len(colors)] for i, class_name in enumerate(class_list)}
+    
+    # Draw each detection
     for score, label, box in zip(detections["scores"], detections["labels"], detections["boxes"]):
         class_name = model.config.id2label[label.item()]
         box_color = class_colors.get(class_name, "white")
@@ -100,11 +103,13 @@ def main():
     model, image_processor = load_model(args.hub_id, args.repo_id, args.device)
     
     if args.input_path.lower().endswith(('.png', '.jpg', '.jpeg')):
+        # Handle image input
         if args.output_path is None:
             args.output_path = os.path.join(os.path.dirname(args.input_path), "output.png")
         os.makedirs(os.path.dirname(args.output_path), exist_ok=True)
         process_image(args.input_path, args.output_path, model, image_processor, args.device, args.confidence_threshold)
     elif args.input_path.lower().endswith(('.mp4', '.avi', '.mov')):
+        # Handle video input
         if args.output_path is None:
             args.output_path = os.path.join(os.path.dirname(args.input_path), "output.mp4")
         os.makedirs(os.path.dirname(args.output_path), exist_ok=True)
