@@ -38,7 +38,7 @@ def val_formatted_anns(image_id, objects):
         new_ann = {
             "id": objects["id"][i],
             "category_id": objects["category"][i],
-            "iscrowd": 0,
+            "iscrowd": 0,   # Assume no crowd annotations
             "image_id": image_id,
             "area": objects["area"][i],
             "bbox": objects["bbox"][i],
@@ -51,14 +51,17 @@ def save_annotation_file_images(dataset, id2label, mode="val"):
     output_json = {}
     path_output = f"{os.getcwd()}/output/"
 
+    # Create output directory if it doesn't exist
     if not os.path.exists(path_output):
         os.makedirs(path_output)
 
+    # Define annotation file path
     path_anno = os.path.join(path_output, "boat_ann_val.json" if mode == "val" else "boat_ann_val_real.json")
     categories_json = [{"supercategory": "none", "id": id, "name": id2label[id]} for id in id2label]
     output_json["images"] = []
     output_json["annotations"] = []
     
+    #Process each example in the dataset
     for example in dataset:
         ann = val_formatted_anns(example["image_id"], example["objects"])
         if not os.path.exists(example["image_path"]):
@@ -75,9 +78,11 @@ def save_annotation_file_images(dataset, id2label, mode="val"):
         output_json["annotations"].extend(ann)
     output_json["categories"] = categories_json
 
+    # Save annotations to JSON file
     with open(path_anno, "w") as file:
         json.dump(output_json, file, ensure_ascii=False, indent=4)
 
+    # Save images to the output directory
     for image_path, img_id in zip(dataset["image_path"], dataset["image_id"]):
         if not os.path.exists(image_path):
             continue
@@ -121,7 +126,7 @@ def main():
     val_dataloader = torch.utils.data.DataLoader(
         test_ds_coco_format, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, collate_fn=collate_fn
     )
-    
+    # Perform evaluation
     with torch.no_grad():
         for idx, batch in enumerate(tqdm(val_dataloader)):
             batch = {k: v.to(args.device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
@@ -137,7 +142,7 @@ def main():
     
             module.add(prediction=results, reference=labels)
             del batch
-    
+    # Compute and print evaluation results
     results = module.compute()
     print(results)
     # Save results to a txt file
