@@ -7,11 +7,24 @@
 
     <arg name="classes_path" default="$(find detr_inference)/classes/GuardBoat_classes.txt"/>
 
-    <arg name="confidence_threshold" default="0.8"/>
+    <arg name="confidence_threshold" default="0.5"/>
 
-    <node name="detr_inference" pkg="detr_inference" type="detr_inference.py" output="screen">
+    <node name="detr_inference_vir" pkg="detr_inference" type="detr_inference.py" output="screen">
         <param name="sub_camera_topic" value="/camera_stitched/color/image_raw/compressed"/>
         <param name="pub_camera_topic" value="/detection_result_img/camera_stitched/compressed"/>
+        <param name="hub_id" value="$(arg hub_id)"/>
+        <param name="repo_id" value="$(arg repo_id)"/>
+        <param name="classes_path" value="$(arg classes_path)"/>
+        <param name="confidence_threshold" value="$(arg confidence_threshold)"/>
+        <param name="pub_detection_image" value="$(arg pub_detection_image)"/>
+        <param name="pub_scores_topic" value="~detection_scores"/>
+        <param name="pub_labels_topic" value="~detection_labels"/>
+        <param name="pub_boxes_topic" value="~detection_boxes"/>
+    </node>
+
+    <node name="detr_inference_jim" pkg="detr_inference" type="detr_inference.py" output="screen">
+        <param name="sub_camera_topic" value="/camera/color/image_raw/compressed"/>
+        <param name="pub_camera_topic" value="/detection_result_img/camera/compressed"/>
         <param name="hub_id" value="$(arg hub_id)"/>
         <param name="repo_id" value="$(arg repo_id)"/>
         <param name="classes_path" value="$(arg classes_path)"/>

@@ -19,14 +19,15 @@ install/
 logs/
 
 .cache
-detr-resnet-50-finetuned-600-epochs-Kaohsiung-Port-dataset/
 results.txt
 __pycache__/
 output.png
 output.mp4
 source_videos/
+output_videos/
 
-detr-resnet-50-finetuned-600-epochs-KS-Buoy-dataset/
-detr-resnet-50-finetuned-20-epochs-Boat-dataset-0314/
+detr-*/
+git_log_long.txt
+git_log_short.txt
 
 ros1_ws/src/detr_inference/model

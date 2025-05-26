@@ -125,13 +125,19 @@ Setup ROS
 source environment_ros1.sh 
 ```
 
-Run DETR
+Download DETR model from huggingface hub
+
+```bash
+rosrun detr_inference download_model.py
+```
+
+ROS1 Inference local DETR model
 
 ```bash
 roslaunch detr_inference detr_inference.launch 
 ```
 
-Or Run DETR searching for visual servoing
+Or ROS1 Inference local DETR model for visual servoing
 
 ```bash
 roslaunch detr_inference detr_inference_searching.launch 
