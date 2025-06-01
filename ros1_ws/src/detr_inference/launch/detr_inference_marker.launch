@@ -1,0 +1,25 @@
+<launch>
+   
+    <arg name="pub_detection_image" default="true"/>
+    
+    <arg name="hub_id" default="ARG-NCTU"/>
+    <arg name="repo_id" default="detr-resnet-50-finetuned-600-epochs-GuardBoat-dataset"/>
+    <!-- <arg name="repo_id" default="detr-resnet-50-finetuned-20-epochs-boat-dataset"/> -->
+
+    <arg name="classes_path" default="$(find detr_inference)/classes/GuardBoat_classes.txt"/>
+    <!-- <arg name="classes_path" default="$(find detr_inference)/classes/GuardBoat_classes.txt"/> -->
+
+    <arg name="confidence_threshold" default="0.7"/>
+
+    <node name="detr_inference" pkg="detr_inference" type="detr_inference_marker.py" output="screen">
+        <param name="sub_camera_topic" value="/camera2_fix/color/image_raw/compressed"/>
+        <param name="pub_camera_topic" value="/detection_result_img/camera2/compressed"/>
+        <param name="hub_id" value="$(arg hub_id)"/>
+        <param name="repo_id" value="$(arg repo_id)"/>
+        <param name="classes_path" value="$(arg classes_path)"/>
+        <param name="confidence_threshold" value="$(arg confidence_threshold)"/>
+        <param name="pub_detection_image" value="$(arg pub_detection_image)"/>
+        <param name="pub_marker_topic" value="/detr/camera_mid/bboxes"/>
+    </node>
+
+</launch>
