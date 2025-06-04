@@ -76,12 +76,10 @@ class DetrInferenceSearchingNode:
     def init_publishers(self):
         """Initialize ROS publishers."""
         self.pub_detection_image = rospy.Publisher(rospy.get_param('~pub_camera_topic', '/detection_result_img/camera_stitched/compressed'), CompressedImage, queue_size=1)
-        self.pub_scores = rospy.Publisher(rospy.get_param('~pub_scores_topic', '~detection_scores'), Float32MultiArray, queue_size=1)
-        self.pub_labels = rospy.Publisher(rospy.get_param('~pub_labels_topic', '~detection_labels'), Int32MultiArray, queue_size=1)
-        self.pub_boxes = rospy.Publisher(rospy.get_param('~pub_boxes_topic', '~detection_boxes'), Int32MultiArray, queue_size=1)
         self.pub_highest_conf_bbox_center_cord = rospy.Publisher(rospy.get_param('~pub_highest_conf_bbox_center_cord_topic', '~highest_conf_detection_bbox_center_cord'), Float32MultiArray, queue_size=1)
         self.pub_highest_conf_bbox_area = rospy.Publisher(rospy.get_param('~pub_highest_conf_bbox_area_topic', '~highest_conf_detection_bbox_area'), Float32, queue_size=1)
         self.pub_detected = rospy.Publisher(rospy.get_param('~pub_detected_topic', '~detected'), Bool, queue_size=1)
+        self.pub_highest_conf_bbox_bottom_xy = rospy.Publisher(rospy.get_param('~pub_highest_conf_bbox_bottom_xy_topic', '~highest_conf_detection_bbox_bottom_xy'), Int32MultiArray, queue_size=1)
 
     def detect_objects(self, image):
         """Perform object detection on the input image."""
@@ -97,20 +95,6 @@ class DetrInferenceSearchingNode:
         rgb = mcolors.to_rgb(color_name)  # e.g., (1.0, 1.0, 0.0)
         rgb = [int(x * 255) for x in rgb]
         return (rgb[2], rgb[1], rgb[0])  # Convert RGB to BGR
-
-    def draw_detections(self, image, detections):
-        """Draw bounding boxes and labels directly on a cv2 (BGR) image using self.class_colors."""
-        for score, label, box in zip(detections["scores"], detections["labels"], detections["boxes"]):
-            class_name = self.model.config.id2label[label.item()]
-            color_name = self.class_colors.get(class_name, "white")
-            box_color = self.name_to_bgr(color_name)
-            x, y, x2, y2 = [int(i) for i in box.tolist()]
-            cv2.rectangle(image, (x, y), (x2, y2), box_color, 2)
-            bbox_area = (x2 - x) * (y2 - y)
-            text = f"{class_name} {score:.2f} area:{bbox_area}"
-            text_y = y - 10 if y - 10 > 10 else y + 20
-            cv2.putText(image, text, (x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 2)
-        return image
     
     def draw_detection(self, image, detection, highest_conf_bbox_center_cord, bbox_area):
         score, class_name, box = detection
@@ -148,23 +132,12 @@ class DetrInferenceSearchingNode:
             rospy.loginfo("Detection processing took: %f seconds", time.time() - start_time)
 
             if len(detections["scores"]) > 0:
-                scores = detections["scores"].detach().cpu().numpy().tolist()
-                labels = detections["labels"].detach().cpu().numpy().tolist()
-                boxes = detections["boxes"].detach().cpu().numpy().astype(np.int32).tolist()
-
-                # Publish detections
-                self.pub_scores.publish(Float32MultiArray(data=scores))
-                self.pub_labels.publish(Int32MultiArray(data=labels))
-                self.pub_boxes.publish(Int32MultiArray(data=[item for sublist in boxes for item in sublist]))  # Flattened 2D array
-
-                rospy.loginfo("Published detections: %d objects detected", len(scores))
-
                 # Find the score, label, bbox of highest confidence (score) detection
                 highest_confidence_idx = torch.argmax(detections["scores"])
                 highest_confidence_score = detections["scores"][highest_confidence_idx].item()
                 highest_confidence_label = self.model.config.id2label[detections["labels"][highest_confidence_idx].item()]
                 highest_confidence_bbox = detections["boxes"][highest_confidence_idx].detach().cpu().numpy().flatten().tolist()
-
+                
                 # rospy.loginfo("Highest confidence detection: %s, score: %f, bbox: %s", highest_confidence_label, highest_confidence_score, highest_confidence_bbox)
 
                 if highest_confidence_score > self.confidence_threshold:
@@ -189,9 +162,10 @@ class DetrInferenceSearchingNode:
                     self.pub_highest_conf_bbox_center_cord.publish(Float32MultiArray(data=[bbox_center_x, bbox_center_y]))
                     self.pub_highest_conf_bbox_area.publish(Float32(data=bbox_area))
 
+                    self.pub_highest_conf_bbox_bottom_xy.publish(Int32MultiArray(data=[int((x1 + x2) // 2), int(y2)]))
+
             if self.pub_detection_image_enabled:
                 try:
-                    # processed_image = self.draw_detections(pil_image, detections)
                     if self.detected:
                         detection = [highest_confidence_score, highest_confidence_label, highest_confidence_bbox]
                         processed_image = self.draw_detection(cv_image, detection, highest_conf_bbox_center_cord, bbox_area)

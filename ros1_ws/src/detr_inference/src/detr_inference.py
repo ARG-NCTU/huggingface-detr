@@ -79,6 +79,7 @@ class DetrInferenceNode:
         self.pub_scores = rospy.Publisher(rospy.get_param('~pub_scores_topic', '~detection_scores'), Float32MultiArray, queue_size=1)
         self.pub_labels = rospy.Publisher(rospy.get_param('~pub_labels_topic', '~detection_labels'), Int32MultiArray, queue_size=1)
         self.pub_boxes = rospy.Publisher(rospy.get_param('~pub_boxes_topic', '~detection_boxes'), Int32MultiArray, queue_size=1)
+        self.pub_boxes_bottom = rospy.Publisher(rospy.get_param('~pub_boxes_bottom_topic', '~detection_boxes_bottom'), Int32MultiArray, queue_size=1)
     
     def detect_objects(self, image):
         """Perform object detection on the input image."""
@@ -134,11 +135,19 @@ class DetrInferenceNode:
                 scores = detections["scores"].detach().cpu().numpy().tolist()
                 labels = detections["labels"].detach().cpu().numpy().tolist()
                 boxes = detections["boxes"].detach().cpu().numpy().astype(np.int32).tolist()
+                box_bottom = []
+                for box in boxes:
+                    x_min, y_min, x_max, y_max = box
+                    center_x = (x_min + x_max) / 2.0
+                    bottom_y = y_max
+                    box_bottom.extend([center_x, bottom_y])
 
                 # Publish detections
                 self.pub_scores.publish(Float32MultiArray(data=scores))
                 self.pub_labels.publish(Int32MultiArray(data=labels))
                 self.pub_boxes.publish(Int32MultiArray(data=[item for sublist in boxes for item in sublist]))  # Flattened 2D array
+                self.pub_boxes_bottom.publish(Int32MultiArray(data=box_bottom))
+
 
                 rospy.loginfo("Published detections: %d objects detected", len(scores))
 

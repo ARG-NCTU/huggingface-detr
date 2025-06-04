@@ -17,12 +17,10 @@
         <param name="classes_path" value="$(arg classes_path)"/>
         <param name="confidence_threshold" value="$(arg confidence_threshold)"/>
         <param name="pub_detection_image" value="$(arg pub_detection_image)"/>
-        <param name="pub_scores_topic" value="~detection_scores"/>
-        <param name="pub_labels_topic" value="~detection_labels"/>
-        <param name="pub_boxes_topic" value="~detection_boxes"/>
         <param name="pub_highest_conf_bbox_center_cord_topic" value="~highest_conf_detection_bbox_center_cord"/>
         <param name="pub_highest_conf_bbox_area_topic" value="~highest_conf_detection_bbox_area"/>
         <param name="pub_detected_topic" value="~detected"/>
+        <param name="pub_highest_conf_bbox_bottom_xy_topic" value="~highest_conf_detection_bbox_bottom_xy"/>
     </node>
 
 </launch>
