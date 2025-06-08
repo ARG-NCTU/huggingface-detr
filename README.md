@@ -128,7 +128,7 @@ source environment_ros1.sh
 Download DETR model from huggingface hub
 
 ```bash
-rosrun detr_inference download_model.py
+roslaunch detr_inference download_model.launch
 ```
 
 ROS1 Inference local DETR model
@@ -141,4 +141,10 @@ Or ROS1 Inference local DETR model for visual servoing
 
 ```bash
 roslaunch detr_inference detr_inference_searching.launch 
+```
+
+Or ROS1 Inference local DETR model for distance & angle detection
+
+```bash
+roslaunch detr_inference detr_inference_searching_distance.launch 
 ```
