@@ -1,0 +1,32 @@
+<launch>
+
+    <arg name="pub_detection_image" default="true"/>
+    
+    <arg name="hub_id" default="ARG-NCTU"/>
+    <arg name="repo_id" default="detr-resnet-50-finetuned-600-epochs-KS-Buoy-dataset"/>
+
+    <arg name="classes_path" default="$(find detr_inference)/classes/KS_Buoy_classes.txt"/>
+
+    <arg name="confidence_threshold" default="0.5"/>
+
+    <arg name="h1_path" default="$(find detr_inference)/homography/cylindrical-js-fish-cam-640x480/H1_000165.npy" />
+    <arg name="h2_path" default="$(find detr_inference)/homography/cylindrical-js-fish-cam-640x480/H2_000165.npy" />
+
+    <arg name="crop_rect" default="[650,120,660,240]"/>
+
+    <node name="detr_inference_searching_distance" pkg="detr_inference" type="detr_inference_searching_distance.py" output="screen">
+        <param name="sub_camera_topic" value="/camera_pano_stitched/image_raw/compressed"/>
+        <param name="sub_camera_annotated_topic" value="/camera_pano_masked/image_raw/compressed"/>
+        <param name="pub_camera_topic" value="/detr/compressed"/>
+        <param name="pub_marker_topic" value="/detr/marker"/>
+        <param name="hub_id" value="$(arg hub_id)"/>
+        <param name="repo_id" value="$(arg repo_id)"/>
+        <param name="classes_path" value="$(arg classes_path)"/>
+        <param name="confidence_threshold" value="$(arg confidence_threshold)"/>
+        <param name="pub_detection_image" value="$(arg pub_detection_image)"/>
+        <param name="h1_path" value="$(arg h1_path)"/>
+        <param name="h2_path" value="$(arg h2_path)"/>
+        <param name="crop_rect" value="$(arg crop_rect)"/>
+    </node>
+
+</launch>
