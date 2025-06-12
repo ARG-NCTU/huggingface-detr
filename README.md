@@ -36,7 +36,9 @@ Download HuggingFace dataset:
 huggingface-cli login
 ```
 ```bash
-huggingface-cli download ARG-NCTU/Boat_dataset_2024 --repo-type dataset --local-dir ~/huggingface-detr
+huggingface-cli download ARG-NCTU/Boat_dataset_2024 \
+--repo-type dataset \
+--local-dir ~/huggingface-detr
 ```
 
 Unzip images:
@@ -62,7 +64,24 @@ cd ~/huggingface-detr/
 ### Training
 
 ```bash
-python3 train.py --save_model_hub_id ARG-NCTU --save_model_repo_id detr-resnet-50-finetuned-20-epochs-Boat-dataset --load_model_hub_id facebook --load_model_repo_id detr-resnet-50 --dataset_hub_id ARG-NCTU --dataset_repo_id Boat_dataset_2024 --dataset_format jsonl --epoch 20 --batch_size 8 --learning_rate 1e-5 --weight_decay 1e-4 --logging_steps 50 --save_total_limit 100 --classes_path data/classes.txt --image_height 480 --image_width 640 --device cuda
+python3 train.py \
+--save_model_hub_id ARG-NCTU \
+--save_model_repo_id detr-resnet-50-finetuned-20-epochs-Boat-dataset \
+--load_model_hub_id facebook \
+--load_model_repo_id detr-resnet-50 \
+--dataset_hub_id ARG-NCTU \
+--dataset_repo_id Boat_dataset_2024 \
+--dataset_format jsonl \
+--epoch 20 \
+--batch_size 8 \
+--learning_rate 1e-5 \
+--weight_decay 1e-4 \
+--logging_steps 50 \
+--save_total_limit 100 \
+--classes_path data/classes.txt \
+--image_height 480 \
+--image_width 640 \
+--device cuda
 ```
 
 Or modify the train.sh and run it:
@@ -74,7 +93,10 @@ source train.sh
 Upload model weights to hub (If push_to_hub not working)
 
 ```bash
-huggingface-cli upload ARG-NCTU/detr-resnet-50-finetuned-20-epochs-Boat-dataset detr-resnet-50-finetuned-20-epochs-Boat-dataset --repo-type=model --commit-message="Upload model weights to hub"
+huggingface-cli upload ARG-NCTU/detr-resnet-50-finetuned-20-epochs-Boat-dataset \
+detr-resnet-50-finetuned-20-epochs-Boat-dataset \
+--repo-type=model \
+--commit-message="Upload model weights to hub"
 ```
 
 Use tensorboard to see training logs
@@ -86,7 +108,18 @@ tensorboard --logdir=detr-resnet-50-finetuned-20-epochs-Boat-dataset/runs
 ### Evaluation
 
 ```bash
-python3 eval.py --hub_id ARG-NCTU --repo_id detr-resnet-50-finetuned-20-epochs-Boat-dataset --dataset_hub_id ARG-NCTU --dataset_repo_id Boat_dataset_2024 --dataset_format jsonl --classes_path data/classes.txt --image_height 480 --image_width 640 --batch_size 8 --num_workers 4 --device cuda
+python3 eval.py \
+--hub_id ARG-NCTU \
+--repo_id detr-resnet-50-finetuned-20-epochs-Boat-dataset \
+--dataset_hub_id ARG-NCTU \
+--dataset_repo_id Boat_dataset_2024 \
+--dataset_format jsonl \
+--classes_path data/classes.txt \
+--image_height 480 \
+--image_width 640 \
+--batch_size 8 \
+--num_workers 4 \
+--device cuda
 ```
 
 Or modify the eval.sh and run it:
@@ -100,7 +133,12 @@ source eval.sh
 Download Source Videos [Link](http://gofile.me/773h8/baC1yKEOm)
 
 ```bash
-python3 inference.py --hub_id ARG-NCTU --repo_id detr-resnet-50-finetuned-20-epochs-Boat-dataset --input_path source_videos/Multi_Boat.mp4 --output_path output_videos/Multi_Boat.mp4 --confidence_threshold 0.5
+python3 inference.py \
+--hub_id ARG-NCTU \
+--repo_id detr-resnet-50-finetuned-20-epochs-Boat-dataset \
+--input_path source_videos/Multi_Boat.mp4 \
+--output_path output_videos/Multi_Boat.mp4 \
+--confidence_threshold 0.5
 ```
 
 ### Build ROS1 Workspace
