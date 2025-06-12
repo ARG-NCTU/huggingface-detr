@@ -193,6 +193,12 @@ ROS1 Inference local DETR model
 roslaunch detr_inference detr_inference.launch 
 ```
 
+or ROS1 Inference local DETR model for pointcloud clustered bbox matching
+
+```bash
+roslaunch detr_inference detr_inference_marker.launch 
+```
+
 Or ROS1 Inference local DETR model for visual servoing
 
 ```bash
