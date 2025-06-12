@@ -28,12 +28,6 @@ More terminal:
 source Docker/ros1-gpu/join.sh
 ```
 
-In addition, you can convert docker image to SQSH file (not necessary)
-
-```bash
-source docker2sqsh.sh 
-```
-
 ## Prepare Dataset
 
 Download HuggingFace dataset:
@@ -65,10 +59,16 @@ Enter the repo
 cd ~/huggingface-detr/
 ```
 
-Training
+### Training
 
 ```bash
 python3 train.py --save_model_hub_id ARG-NCTU --save_model_repo_id detr-resnet-50-finetuned-20-epochs-Boat-dataset --load_model_hub_id facebook --load_model_repo_id detr-resnet-50 --dataset_hub_id ARG-NCTU --dataset_repo_id Boat_dataset_2024 --dataset_format jsonl --epoch 20 --batch_size 8 --learning_rate 1e-5 --weight_decay 1e-4 --logging_steps 50 --save_total_limit 100 --classes_path data/classes.txt --image_height 480 --image_width 640 --device cuda
+```
+
+Or modify the train.sh and run it:
+
+```bash
+source train.sh
 ```
 
 Upload model weights to hub (If push_to_hub not working)
@@ -77,13 +77,25 @@ Upload model weights to hub (If push_to_hub not working)
 huggingface-cli upload ARG-NCTU/detr-resnet-50-finetuned-20-epochs-Boat-dataset detr-resnet-50-finetuned-20-epochs-Boat-dataset --repo-type=model --commit-message="Upload model weights to hub"
 ```
 
-Evaluation
+Use tensorboard to see training logs
+
+```bash
+tensorboard --logdir=detr-resnet-50-finetuned-20-epochs-Boat-dataset/runs
+```
+
+### Evaluation
 
 ```bash
 python3 eval.py --hub_id ARG-NCTU --repo_id detr-resnet-50-finetuned-20-epochs-Boat-dataset --dataset_hub_id ARG-NCTU --dataset_repo_id Boat_dataset_2024 --dataset_format jsonl --classes_path data/classes.txt --image_height 480 --image_width 640 --batch_size 8 --num_workers 4 --device cuda
 ```
 
-Inferencing
+Or modify the eval.sh and run it:
+
+```bash
+source eval.sh
+```
+
+### Inferencing
 
 Download Source Videos [Link](http://gofile.me/773h8/baC1yKEOm)
 
@@ -91,7 +103,7 @@ Download Source Videos [Link](http://gofile.me/773h8/baC1yKEOm)
 python3 inference.py --hub_id ARG-NCTU --repo_id detr-resnet-50-finetuned-20-epochs-Boat-dataset --input_path source_videos/Multi_Boat.mp4 --output_path output_videos/Multi_Boat.mp4 --confidence_threshold 0.5
 ```
 
-## Build ROS1 Workspace
+### Build ROS1 Workspace
 
 Enter the repo
 
@@ -117,7 +129,7 @@ Build catkin ws
 source build_ros1_all.sh
 ```
 
-## ROS1 Inference
+### ROS1 Inference
 
 Setup ROS
 

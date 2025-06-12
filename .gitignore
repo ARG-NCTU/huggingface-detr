@@ -1,9 +1,6 @@
 data/
-images/
+images*/
 data_boat/
-images_boat/
-images_KS/
-images_KS_Buoy/
 extracted_image/
 dgx_gpu_flat.tar
 dgx_gpu.sqsh
