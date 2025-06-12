@@ -141,6 +141,12 @@ python3 inference.py \
 --confidence_threshold 0.5
 ```
 
+Or modify inference.sh and run it:
+
+```bash
+source inference.sh
+```
+
 ### Build ROS1 Workspace
 
 Enter the repo
