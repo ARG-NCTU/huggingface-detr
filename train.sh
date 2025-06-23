@@ -14,7 +14,7 @@ while true; do
     --learning_rate 1e-5 \
     --weight_decay 1e-4 \
     --logging_steps 50 \
-    --save_total_limit 100 \
+    --save_total_limit 5 \
     --classes_path data/GuardBoat_classes.txt \
     --image_height 480 \
     --image_width 1920 \
