@@ -16,7 +16,7 @@ import cv2
 import matplotlib.colors as mcolors
 import ast
 import math
-from visualization_msgs.msg import Marker
+from visualization_msgs.msg import Marker, MarkerArray
 
 rospack = rospkg.RosPack()
 
@@ -65,9 +65,11 @@ class DetrInferenceSearchingDistanceNode:
         self.M_L = np.load(rospy.get_param("~h1_path"), None)
         self.M_R = np.load(rospy.get_param("~h2_path"), None)
         crop_str = rospy.get_param("~crop_rect", None)
+        self.image_width = None
         if crop_str:
             try:
                 self.crop_rect = ast.literal_eval(crop_str)
+                self.image_width = self.crop_rect[2]
                 if not isinstance(self.crop_rect, list) or len(self.crop_rect) != 4:
                     rospy.logwarn("Invalid crop_rect format. Expected [x,y,w,h].")
                     self.crop_rect = None
@@ -78,10 +80,10 @@ class DetrInferenceSearchingDistanceNode:
             self.crop_rect = None
 
         # Colors for bounding boxes
-        # self.colors = ["red", "green", "blue", "yellow", "purple", "orange", "cyan", "magenta",
-        #                "lime", "pink", "teal", "lavender", "brown", "beige", "maroon", "mint",
-        #                "olive", "apricot", "navy", "grey", "white", "black"]
-        self.colors = ["yellow",]
+        self.colors = ["cyan", "orange", "red", "yellow", "green", "purple", "blue", "magenta",
+                       "lime", "pink", "teal", "lavender", "brown", "beige", "maroon", "mint",
+                       "olive", "apricot", "navy", "grey", "white", "black"]
+        # self.colors = ["yellow",]
 
     def load_classes(self):
         """Load class names from the specified file."""
@@ -104,7 +106,7 @@ class DetrInferenceSearchingDistanceNode:
     def init_publishers(self):
         """Initialize ROS publishers."""
         self.pub_detection_image = rospy.Publisher(rospy.get_param('~pub_camera_topic', '/detr/compressed'), CompressedImage, queue_size=1)
-        self.pub_marker = rospy.Publisher(rospy.get_param('~pub_marker_topic', '/detr/marker'), Marker, queue_size=1)
+        self.pub_marker_array = rospy.Publisher(rospy.get_param('~pub_marker_array_topic', '/detr/base_link/marker_array'), MarkerArray, queue_size=1)
     
     def detect_objects(self, image):
         """Perform object detection on the input image."""
@@ -121,38 +123,38 @@ class DetrInferenceSearchingDistanceNode:
         rgb = [int(x * 255) for x in rgb]
         return (rgb[2], rgb[1], rgb[0])  # Convert RGB to BGR
     
-    def draw_detection(self, image, detection, distance, angle):
-        score, class_name, box = detection
-        color_name = self.class_colors.get(class_name, "white")
-        box_color = self.name_to_bgr(color_name)
-        x, y, x2, y2 = [int(i) for i in box]
-        cv2.rectangle(image, (x, y), (x2, y2), box_color, 2)
+    def draw_detections(self, image, detection_list):
+        for score, class_name, box, distance, angle in detection_list:
+            color_name = self.class_colors.get(class_name, "white")
+            box_color = self.name_to_bgr(color_name)
+            x, y, x2, y2 = [int(i) for i in box]
+            cv2.rectangle(image, (x, y), (x2, y2), box_color, 2)
 
-        # Class text
-        text_top_class = f"class: {class_name}"
-        text_top_class_y = y - 40
-        cv2.putText(image, text_top_class, (x, text_top_class_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 2)
-        cv2.putText(image, text_top_class, (x, text_top_class_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 1)
+            # Class text
+            text_top_class = f"class: {class_name}"
+            text_top_class_y = y - 40
+            cv2.putText(image, text_top_class, (x, text_top_class_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 2)
+            cv2.putText(image, text_top_class, (x, text_top_class_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 1)
 
-        # Confidence text
-        text_top_conf = f"conf: {score:.2f}"
-        text_top_conf_y = text_top_class_y + 20
-        cv2.putText(image, text_top_conf, (x, text_top_conf_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 2)
-        cv2.putText(image, text_top_conf, (x, text_top_conf_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 1)
+            # Confidence text
+            text_top_conf = f"conf: {score:.2f}"
+            text_top_conf_y = text_top_class_y + 20
+            cv2.putText(image, text_top_conf, (x, text_top_conf_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 2)
+            cv2.putText(image, text_top_conf, (x, text_top_conf_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 1)
 
-        # Distance text
-        distance = int(distance) if distance is not None else "N/A"
-        text_buttom_distance = f"dist: {distance} m"
-        text_buttom_distance_y = y2 + 20 if y2 + 20 < image.shape[0] - 10 else y - 20
-        cv2.putText(image, text_buttom_distance, (x, text_buttom_distance_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 2)
-        cv2.putText(image, text_buttom_distance, (x, text_buttom_distance_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 1)
+            # Distance text
+            distance = int(distance) if distance is not None else "N/A"
+            text_buttom_distance = f"dist: {distance} m"
+            text_buttom_distance_y = y2 + 20 if y2 + 20 < image.shape[0] - 10 else y - 20
+            cv2.putText(image, text_buttom_distance, (x, text_buttom_distance_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 2)
+            cv2.putText(image, text_buttom_distance, (x, text_buttom_distance_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 1)
 
-        # Angle text
-        angle = int(angle) if angle is not None else "N/A"
-        text_buttom_angle = f"angle: {angle} deg"
-        text_buttom_angle_y = text_buttom_distance_y + 20 if text_buttom_distance_y + 20 < image.shape[0] - 10 else y - 40
-        cv2.putText(image, text_buttom_angle, (x, text_buttom_angle_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 2)
-        cv2.putText(image, text_buttom_angle, (x, text_buttom_angle_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 1)
+            # Angle text
+            angle = int(angle) if angle is not None else "N/A"
+            text_buttom_angle = f"angle: {angle} deg"
+            text_buttom_angle_y = text_buttom_distance_y + 20 if text_buttom_distance_y + 20 < image.shape[0] - 10 else y - 40
+            cv2.putText(image, text_buttom_angle, (x, text_buttom_angle_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 2)
+            cv2.putText(image, text_buttom_angle, (x, text_buttom_angle_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 1)
 
         return image
 
@@ -190,64 +192,51 @@ class DetrInferenceSearchingDistanceNode:
         if pil_image:
             start_time = time.time()
             detections = self.detect_objects(pil_image)
-            rospy.loginfo("Detection processing took: %f seconds", time.time() - start_time)
 
             if len(detections["scores"]) > 0:
-                # Find the score, label, bbox of highest confidence (score) detection
-                highest_confidence_idx = torch.argmax(detections["scores"])
-                highest_confidence_score = detections["scores"][highest_confidence_idx].item()
-                highest_confidence_label = self.model.config.id2label[detections["labels"][highest_confidence_idx].item()]
-                highest_confidence_bbox = detections["boxes"][highest_confidence_idx].detach().cpu().numpy().flatten().tolist()
-                
-                # rospy.loginfo("Highest confidence detection: %s, score: %f, bbox: %s", highest_confidence_label, highest_confidence_score, highest_confidence_bbox)
+                scores = detections["scores"].detach().cpu().numpy().tolist()
+                labels = detections["labels"].detach().cpu().numpy().tolist()
+                boxes = detections["boxes"].detach().cpu().numpy().astype(np.int32).tolist()
+                detection_list = []
+                rospy.loginfo(f"scores: {scores}, labels: {labels}, boxes: {boxes}")
 
-                if highest_confidence_score > self.confidence_threshold:
-                    self.detected = True
-                    # Normalize the bbox center_x, center_y, width, height to [-1, 1]
-                    x1, y1, x2, y2 = highest_confidence_bbox
+                for score, label_id, box in zip(scores, labels, boxes):
+                    x1, y1, x2, y2 = box
+                    center_x = (x1 + x2) / 2
 
-                    bbox_center_x, bbox_center_y, bbox_width, bbox_height = (x1 + x2) / 2, (y1 + y2) / 2, x2 - x1, y2 - y1
-
-                    image_width = pil_image.width
-                    image_height = pil_image.height
-
-                    # Determine which camera the detection is from with bbox center_x
-                    if bbox_center_x < image_width / 3:
+                    if center_x < self.image_width / 3:
                         cam_idx = 0
-                    elif bbox_center_x < 2 * image_width / 3:
+                    elif center_x < 2 * self.image_width / 3:
                         cam_idx = 1
                     else:
                         cam_idx = 2
 
-                    # mapping pano_x, pano_y to original image coordinates
-                    mapped_cord = self.pano_to_original((bbox_center_x, y2), cam_idx, image_width)
+                    mapped_cord = self.pano_to_original((center_x, y2), cam_idx, self.image_width)
+                    if mapped_cord is None:
+                        continue
 
-                    # rospy.loginfo("Mapped coordinates: %s", mapped_cord)
-
-                    if mapped_cord is not None:
-                        original_x, original_y = mapped_cord
-                        distance = self.get_distance(original_y, cam_idx)
-                        angle = self.get_angle(image_width, original_x, cam_idx)
-                        # rospy.loginfo("Distance: %s, Angle: %s", distance, angle)
-                    else:
-                        rospy.logwarn("Mapped coordinates are None, skipping distance calculation.")
-                        distance = None
-                        angle = None
+                    original_x, original_y = mapped_cord
+                    distance = self.get_distance(original_y, cam_idx)
+                    angle = self.get_angle(self.image_width, original_x, cam_idx)
 
                     if distance is None or angle is None:
-                        rospy.logwarn("Distance or angle is None, skipping drawing detection.")
-                        self.detected = False
-                        return
-                    else:
-                        self.publish_detection_marker(distance, angle)
+                        continue
+
+                    class_name = self.model.config.id2label[label_id]
+                    detection_list.append((score, class_name, box, distance, angle))
+                
+                if detection_list:
+                    self.detected = True
+                    self.publish_detection_markers(detection_list, self.image_width)
+                
+                rospy.loginfo("Detection processing took: %f seconds", time.time() - start_time)
 
             if self.pub_detection_image_enabled:
                 try:
                     if self.detected:
-                        detection = [highest_confidence_score, highest_confidence_label, highest_confidence_bbox]
-                        processed_image = self.draw_detection(self.lastest_annotated_image, detection, distance, angle)
+                        processed_image = self.draw_detections(self.lastest_annotated_image, detection_list)
                     else:
-                        processed_image = cv_image
+                        processed_image = self.lastest_annotated_image
                     self.detected = False
                     
                     ros_image = self.bridge.cv2_to_compressed_imgmsg(processed_image, dst_format='jpeg')
@@ -327,25 +316,37 @@ class DetrInferenceSearchingDistanceNode:
         angle = angle_min + (angle_max - angle_min) * x_ratio
         return angle
 
-    def publish_detection_marker(self, distance, angle):
-        marker = Marker()
-        marker.header.frame_id = "base_link"
-        marker.header.stamp = rospy.Time.now()
-        marker.ns = "detected_object"
-        marker.id = 0
-        marker.type = Marker.CUBE
-        marker.action = Marker.ADD
-        marker.pose.position.x = float(distance)
-        marker.pose.position.y = -float(distance * math.tan(math.radians(angle)))
-        marker.pose.position.z = 0.0
-        marker.pose.orientation.w = 1.0
-        marker.scale.x = marker.scale.y = marker.scale.z = 4.0
-        marker.color.r = 0.0
-        marker.color.g = 0.0
-        marker.color.b = 1.0
-        marker.color.a = 0.7
-        self.pub_marker.publish(marker)
+    def publish_detection_markers(self, detection_list, image_width):
+        marker_array = MarkerArray()
 
+        # Delete all previous markers
+        delete_marker = Marker()
+        delete_marker.action = Marker.DELETEALL
+        marker_array.markers.append(delete_marker)
+
+        for idx, detection in enumerate(detection_list):
+            score, class_name, box, distance, angle = detection
+            x1, y1, x2, y2 = box
+
+            marker = Marker()
+            marker.header.frame_id = "base_link"
+            marker.header.stamp = rospy.Time.now()
+            marker.ns = "detected_object"
+            marker.id = idx
+            marker.type = Marker.CUBE
+            marker.action = Marker.ADD
+            marker.pose.position.x = float(distance)
+            marker.pose.position.y = -float(distance * math.tan(math.radians(angle)))
+            marker.pose.position.z = 0.0
+            marker.pose.orientation.w = 1.0
+            marker.scale.x = marker.scale.y = marker.scale.z = 4.0
+            marker.color.r = 0.0
+            marker.color.g = 0.0
+            marker.color.b = 1.0
+            marker.color.a = 0.7
+            marker_array.markers.append(marker)
+
+        self.pub_marker_array.publish(marker_array)
         
 if __name__ == '__main__':
     try:

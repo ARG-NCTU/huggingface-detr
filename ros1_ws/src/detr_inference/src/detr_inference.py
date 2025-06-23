@@ -138,8 +138,8 @@ class DetrInferenceNode:
                 box_bottom = []
                 for box in boxes:
                     x_min, y_min, x_max, y_max = box
-                    center_x = (x_min + x_max) / 2.0
-                    bottom_y = y_max
+                    center_x = int((x_min + x_max) / 2.0)
+                    bottom_y = int(y_max)
                     box_bottom.extend([center_x, bottom_y])
 
                 # Publish detections

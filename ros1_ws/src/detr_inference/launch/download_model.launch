@@ -1,7 +1,9 @@
 <launch>
     <arg name="hf_account_name" value="ARG-NCTU" />
     <!-- <arg name="hf_repo_name" value="detr-resnet-50-finetuned-600-epochs-GuardBoat-dataset" /> -->
-    <arg name="hf_repo_name" value="detr-resnet-50-finetuned-600-epochs-KS-Buoy-dataset" />
+    <!-- <arg name="hf_repo_name" value="detr-resnet-50-finetuned-600-epochs-KS-Buoy-dataset" /> -->
+    <!-- <arg name="hf_repo_name" value="detr-resnet-50-finetuned-600-epochs-Kaohsiung-Port-dataset" /> -->
+    <arg name="hf_repo_name" value="detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset" />
 
     <node name="hf_model_downloader" pkg="detr_inference" type="download_model.py" output="screen">
         <param name="hf_account_name" value="$(arg hf_account_name)" />
