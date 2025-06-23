@@ -1,0 +1,11 @@
+<launch>
+  <node pkg="detr_tf" type="detr_marker_tf_republisher.py" name="detr_marker_tf_node" output="screen">
+    
+    <param name="source_frame_id" value="base_link"/>
+    <param name="target_frame_id" value="map"/>
+
+    <param name="source_marker_array" value="/detr/base_link/marker_array"/>
+    <param name="target_marker_array" value="/detr/map/marker_array"/>
+
+  </node>
+</launch>
