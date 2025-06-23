@@ -187,26 +187,61 @@ Download DETR model from huggingface hub
 roslaunch detr_inference download_model.launch
 ```
 
-ROS1 Inference local DETR model
+#### ROS1 Inference local DETR model
 
 ```bash
 roslaunch detr_inference detr_inference.launch 
 ```
 
-or ROS1 Inference local DETR model for pointcloud clustered bbox matching
-
-```bash
-roslaunch detr_inference detr_inference_marker.launch 
-```
-
-Or ROS1 Inference local DETR model for visual servoing
+#### ROS1 Inference local DETR model for visual servoing
 
 ```bash
 roslaunch detr_inference detr_inference_searching.launch 
 ```
 
-Or ROS1 Inference local DETR model for distance & angle detection
+Refer this guide [link](https://github.com/ARG-NCTU/perception-fusion/blob/main/docs/buoy-navigation-demo.md) for further step of visual servoing
+
+#### ROS1 Inference local DETR model for pointcloud clustered bbox matching
 
 ```bash
-roslaunch detr_inference detr_inference_searching_distance.launch 
+roslaunch detr_inference detr_inference_marker.launch 
+```
+
+Refer this guide [link (CPU version)](https://github.com/ARG-NCTU/perception-fusion/blob/main/docs/lidar-radar-cluster-3d-bbox-detr-2d-bbox-matching-ros2.md) or this guide [link (GPU version)](https://github.com/ARG-NCTU/perception-fusion/blob/main/docs/lidar-radar-cluster-3d-bbox-detr-2d-bbox-matching-ros2-gpu.md) for further step of matching poincloud clustered 3D bbox & DETR 2D Bbox.
+
+#### ROS1 Inference local DETR model for distance & angle detection
+
+Terminal 1:
+```bash
+roslaunch detr_inference detr_inference_distance.launch 
+```
+
+Terminal 2:
+```bash
+roslaunch detr_tf detr_marker_tf_republisher.launch
+```
+
+Terminal 3 (for debug) or run another localization node:
+```bash
+rosrun detr_tf fake_tf_publisher.py
+```
+
+In [opencv-cuda-docker](https://github.com/JetSeaAI/opencv-cuda-docker) repo
+
+Setup:
+```bash
+cd ~/opencv-cuda-docker/
+source docker_build.sh
+source docker_run.sh
+cd ~/opencv-cuda-docker/catkin_ws/
+catkin build
+exit
+```
+
+Run cylindrical stitching with distance:
+```bash
+cd ~/opencv-cuda-docker/
+source docker_run.sh
+source environment.sh 127.0.0.1 127.0.0.1
+roslaunch pano_with_distance pano_with_distance_JS5.launch
 ```
