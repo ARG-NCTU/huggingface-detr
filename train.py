@@ -4,7 +4,8 @@ from transformers import AutoModelForObjectDetection, TrainingArguments, Trainer
 from dataloader import DETRDataLoader
 import os
 import shutil
-
+import threading
+import time
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train DETR model with a custom dataset.')
@@ -46,16 +47,6 @@ class CustomTrainer(Trainer):
             print(f"Pushing model to the hub at epoch {self.state.epoch}...")
             self.push_to_hub(commit_message=f"Checkpoint at epoch {int(self.state.epoch)}")
 
-        args = parse_args()
-        checkpoints = [d for d in os.listdir(args.output_dir) if d.startswith("checkpoint-")]
-        checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[-1]))
-        max_to_keep = args.save_total_limit
-        if len(checkpoints) > max_to_keep:
-            for ckpt_to_remove in checkpoints[:-max_to_keep]:
-                full_path = os.path.join(args.output_dir, ckpt_to_remove)
-                print(f"Removing old checkpoint: {full_path}")
-                shutil.rmtree(full_path, ignore_errors=True)
-
 # Function to find the latest checkpoint
 def get_latest_checkpoint(output_dir):
     checkpoints = [d for d in os.listdir(output_dir) if d.startswith("checkpoint-")]
@@ -67,6 +58,26 @@ def get_latest_checkpoint(output_dir):
         return os.path.join(output_dir, latest_checkpoint)
     else:
         return None
+
+# Function to clean checkpints
+def start_checkpoint_cleaner(output_dir, save_total_limit, interval_sec=300):
+    def cleaner_loop():
+        while True:
+            try:
+                checkpoints = [d for d in os.listdir(output_dir) if d.startswith("checkpoint-")]
+                checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[-1]))
+                if len(checkpoints) > save_total_limit:
+                    for ckpt_to_remove in checkpoints[:-save_total_limit]:
+                        full_path = os.path.join(output_dir, ckpt_to_remove)
+                        print(f"[CheckpointCleaner] Removing old checkpoint: {full_path}")
+                        shutil.rmtree(full_path, ignore_errors=True)
+                time.sleep(interval_sec)
+            except Exception as e:
+                print(f"[CheckpointCleaner] Error: {e}")
+                time.sleep(interval_sec)
+
+    cleaner_thread = threading.Thread(target=cleaner_loop, daemon=True)
+    cleaner_thread.start()
 
 
 def main():
@@ -115,6 +126,8 @@ def main():
         push_to_hub=True,
         hub_model_id=f"{args.save_model_hub_id}/{args.save_model_repo_id}",
     )
+
+    start_checkpoint_cleaner(training_args.output_dir, args.save_total_limit, interval_sec=300)
 
     # Initialize Trainer with collate function, etc.
     trainer = CustomTrainer(
