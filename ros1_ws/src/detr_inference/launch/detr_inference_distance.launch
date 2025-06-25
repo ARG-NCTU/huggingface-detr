@@ -18,7 +18,7 @@
         <param name="sub_camera_topic" value="/camera_pano_stitched/image_raw/compressed"/>
         <param name="sub_camera_annotated_topic" value="/camera_pano_masked/image_raw/compressed"/>
         <param name="pub_camera_topic" value="/detr/compressed"/>
-        <param name="pub_marker_array_topic" value="/detr/base_link/marker_array"/>
+        <param name="pub_marker_array_topic" value="/detr/marker_array"/>
         <param name="hub_id" value="$(arg hub_id)"/>
         <param name="repo_id" value="$(arg repo_id)"/>
         <param name="classes_path" value="$(arg classes_path)"/>
@@ -27,6 +27,8 @@
         <param name="h1_path" value="$(arg h1_path)"/>
         <param name="h2_path" value="$(arg h2_path)"/>
         <param name="crop_rect" value="$(arg crop_rect)"/>
+        <param name="source_frame_id" value="js/front_lidar_link"/>
+        <param name="target_frame_id" value="map"/>
     </node>
 
 </launch>

@@ -17,6 +17,10 @@ import matplotlib.colors as mcolors
 import ast
 import math
 from visualization_msgs.msg import Marker, MarkerArray
+import rospy
+import tf2_ros
+import tf2_geometry_msgs
+from geometry_msgs.msg import PoseStamped
 
 rospack = rospkg.RosPack()
 
@@ -65,6 +69,10 @@ class DetrInferenceSearchingDistanceNode:
         self.M_L = np.load(rospy.get_param("~h1_path"), None)
         self.M_R = np.load(rospy.get_param("~h2_path"), None)
         crop_str = rospy.get_param("~crop_rect", None)
+        self.source_frame = rospy.get_param('~source_frame_id', 'base_link')
+        self.target_frame = rospy.get_param('~target_frame_id', 'map')
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
         self.image_width = None
         if crop_str:
             try:
@@ -106,7 +114,7 @@ class DetrInferenceSearchingDistanceNode:
     def init_publishers(self):
         """Initialize ROS publishers."""
         self.pub_detection_image = rospy.Publisher(rospy.get_param('~pub_camera_topic', '/detr/compressed'), CompressedImage, queue_size=1)
-        self.pub_marker_array = rospy.Publisher(rospy.get_param('~pub_marker_array_topic', '/detr/base_link/marker_array'), MarkerArray, queue_size=1)
+        self.pub_marker_array = rospy.Publisher(rospy.get_param('~pub_marker_array_topic', '/detr/marker_array'), MarkerArray, queue_size=1)
     
     def detect_objects(self, image):
         """Perform object detection on the input image."""
@@ -193,11 +201,13 @@ class DetrInferenceSearchingDistanceNode:
             start_time = time.time()
             detections = self.detect_objects(pil_image)
 
+            detection_list = []
+
             if len(detections["scores"]) > 0:
                 scores = detections["scores"].detach().cpu().numpy().tolist()
                 labels = detections["labels"].detach().cpu().numpy().tolist()
                 boxes = detections["boxes"].detach().cpu().numpy().astype(np.int32).tolist()
-                detection_list = []
+                
                 rospy.loginfo(f"scores: {scores}, labels: {labels}, boxes: {boxes}")
 
                 for score, label_id, box in zip(scores, labels, boxes):
@@ -227,7 +237,20 @@ class DetrInferenceSearchingDistanceNode:
                 
                 if detection_list:
                     self.detected = True
-                    self.publish_detection_markers(detection_list, self.image_width)
+                    transform = self.tf_buffer.lookup_transform(
+                        self.target_frame,
+                        self.source_frame,
+                        rospy.Time(0),
+                        rospy.Duration(0.5)
+                    )
+                    pose_stamped = PoseStamped()
+                    pose_stamped.header.frame_id = self.target_frame
+                    pose_stamped.header.stamp = rospy.Time.now()
+                    pose_stamped.pose.position.x = float(distance)
+                    pose_stamped.pose.position.y = -float(distance * math.tan(math.radians(angle)))
+                    pose_stamped.pose.orientation.w = 1.0
+                    pose_transformed = tf2_geometry_msgs.do_transform_pose(pose_stamped, transform)
+                    self.publish_detection_markers(detection_list, pose_transformed)
                 
                 rospy.loginfo("Detection processing took: %f seconds", time.time() - start_time)
 
@@ -316,7 +339,7 @@ class DetrInferenceSearchingDistanceNode:
         angle = angle_min + (angle_max - angle_min) * x_ratio
         return angle
 
-    def publish_detection_markers(self, detection_list, image_width):
+    def publish_detection_markers(self, detection_list, pose_transformed):
         marker_array = MarkerArray()
 
         # Delete all previous markers
@@ -327,19 +350,19 @@ class DetrInferenceSearchingDistanceNode:
         for idx, detection in enumerate(detection_list):
             score, class_name, box, distance, angle = detection
             x1, y1, x2, y2 = box
+            d_y = abs(y2-y1)
 
             marker = Marker()
-            marker.header.frame_id = "base_link"
+            marker.header.frame_id = self.target_frame
             marker.header.stamp = rospy.Time.now()
             marker.ns = "detected_object"
             marker.id = idx
             marker.type = Marker.CUBE
             marker.action = Marker.ADD
-            marker.pose.position.x = float(distance)
-            marker.pose.position.y = -float(distance * math.tan(math.radians(angle)))
-            marker.pose.position.z = 0.0
-            marker.pose.orientation.w = 1.0
-            marker.scale.x = marker.scale.y = marker.scale.z = 4.0
+            marker.pose = pose_transformed.pose
+            marker.scale.x = 100.0
+            marker.scale.y = 100.0
+            marker.scale.z = 100.0
             marker.color.r = 0.0
             marker.color.g = 0.0
             marker.color.b = 1.0
