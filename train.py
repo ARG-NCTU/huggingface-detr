@@ -3,6 +3,7 @@ import torch
 from transformers import AutoModelForObjectDetection, TrainingArguments, Trainer
 from dataloader import DETRDataLoader
 import os
+import shutil
 
 
 def parse_args():
@@ -44,6 +45,16 @@ class CustomTrainer(Trainer):
         if self.state.epoch % 1 == 0:
             print(f"Pushing model to the hub at epoch {self.state.epoch}...")
             self.push_to_hub(commit_message=f"Checkpoint at epoch {int(self.state.epoch)}")
+
+        args = parse_args()
+        checkpoints = [d for d in os.listdir(args.output_dir) if d.startswith("checkpoint-")]
+        checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[-1]))
+        max_to_keep = args.save_total_limit
+        if len(checkpoints) > max_to_keep:
+            for ckpt_to_remove in checkpoints[:-max_to_keep]:
+                full_path = os.path.join(args.output_dir, ckpt_to_remove)
+                print(f"Removing old checkpoint: {full_path}")
+                shutil.rmtree(full_path, ignore_errors=True)
 
 # Function to find the latest checkpoint
 def get_latest_checkpoint(output_dir):
@@ -99,7 +110,7 @@ def main():
         logging_steps=args.logging_steps,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        save_total_limit=args.save_total_limit,
+        save_total_limit=1000,
         remove_unused_columns=False,
         push_to_hub=True,
         hub_model_id=f"{args.save_model_hub_id}/{args.save_model_repo_id}",
