@@ -114,7 +114,8 @@ class DetrInferenceNode:
             bbox_area = (x2 - x) * (y2 - y)
             text = f"{class_name} {score:.2f} area:{bbox_area}"
             text_y = y - 10 if y - 10 > 10 else y + 20
-            cv2.putText(image, text, (x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 2)
+            cv2.putText(image, text, (x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 2)
+            cv2.putText(image, text, (x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 1)
         return image
 
 
