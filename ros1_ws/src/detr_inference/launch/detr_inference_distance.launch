@@ -29,6 +29,11 @@
         <param name="crop_rect" value="$(arg crop_rect)"/>
         <param name="source_frame_id" value="js/front_lidar_link"/>
         <param name="target_frame_id" value="map"/>
+        <param name="markers_scale" value="100"/>
+        <param name="keep_frame_ratio" value="0.3"/>
+        <param name="max_missed" value="3"/>
+        <param name="max_distance_threshold" value="50"/>
+        <param name="max_id" value="10"/>
     </node>
 
 </launch>
