@@ -1,0 +1,6 @@
+<launch>
+    <!-- js/front_lidar_link -> map (no translation, no rotation) -->
+    <node pkg="tf" type="static_transform_publisher" name="tf_pub"
+          args="0 0 0 0 0 0 map js/front_lidar_link 100" />
+</launch>
+

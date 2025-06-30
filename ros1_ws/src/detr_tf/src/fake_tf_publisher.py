@@ -51,7 +51,7 @@ class FakeTFPublisher:
             t = geometry_msgs.msg.TransformStamped()
             t.header.stamp = now
             t.header.frame_id = "map"
-            t.child_frame_id = "base_link"
+            t.child_frame_id = "js/front_lidar_link"
             t.transform.translation.x = x
             t.transform.translation.y = y
             t.transform.translation.z = 0.0
