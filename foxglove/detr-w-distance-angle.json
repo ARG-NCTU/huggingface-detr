@@ -1,0 +1,158 @@
+{
+  "configById": {
+    "Image!4b6vam8": {
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 45,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {
+        "imageTopic": "/detr/compressed"
+      }
+    },
+    "3D!p6q9or": {
+      "cameraState": {
+        "perspective": true,
+        "distance": 3209.172574424328,
+        "phi": 0.7392770108495806,
+        "thetaOffset": 90.09240411257797,
+        "targetOffset": [
+          -213.7312444973602,
+          -37.343671744520194,
+          1.1601473774183998e-15
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {
+        "/js/velodyne_points": {
+          "visible": false,
+          "colorField": "intensity",
+          "colorMode": "colormap",
+          "colorMap": "turbo",
+          "pointSize": 5
+        },
+        "/detr/marker": {
+          "visible": true
+        },
+        "/detr/base_link/marker_array": {
+          "visible": false
+        },
+        "/detr/map/marker_array": {
+          "visible": false
+        },
+        "/detr/compressed": {
+          "visible": false
+        },
+        "/detr/marker_array": {
+          "visible": true
+        },
+        "/js/detr/future/fov/markers": {
+          "visible": false
+        },
+        "/js/detr/future/markers": {
+          "visible": true
+        },
+        "/js/detr/future/fov/scan": {
+          "visible": false,
+          "colorField": "intensity",
+          "colorMode": "colormap",
+          "colorMap": "turbo"
+        }
+      },
+      "layers": {
+        "grid": {
+          "visible": true,
+          "frameLocked": true,
+          "label": "Grid",
+          "instanceId": "5dc820b0-671b-4de9-a6c9-501368363a76",
+          "layerId": "foxglove.Grid",
+          "size": 1000,
+          "divisions": 10,
+          "lineWidth": 1,
+          "color": "#248eff",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {},
+      "followTf": "map"
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "first": "Image!4b6vam8",
+    "second": "3D!p6q9or",
+    "direction": "column"
+  }
+}

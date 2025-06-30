@@ -209,22 +209,40 @@ roslaunch detr_inference detr_inference_marker.launch
 
 Refer this guide [link (CPU version)](https://github.com/ARG-NCTU/perception-fusion/blob/main/docs/lidar-radar-cluster-3d-bbox-detr-2d-bbox-matching-ros2.md) or this guide [link (GPU version)](https://github.com/ARG-NCTU/perception-fusion/blob/main/docs/lidar-radar-cluster-3d-bbox-detr-2d-bbox-matching-ros2-gpu.md) for further step of matching poincloud clustered 3D bbox & DETR 2D Bbox.
 
-#### ROS1 Inference local DETR model for distance & angle detection
+#### ROS1 Inference local DETR model with ID tracking for distance & angle detection
 
-Terminal 1:
+##### Terminal 1: ROSCORE
+```bash
+roscore
+```
+
+##### Terminal 2: DETR with ID tracking for distance & angle detection
 ```bash
 roslaunch detr_inference detr_inference_distance.launch 
 ```
 
-Terminal 2:
+##### Terminal 3: static tf or run another localization node
 ```bash
-roslaunch detr_tf detr_marker_tf_republisher.launch
+roslaunch detr_tf static_tf.launch
 ```
 
-Terminal 3 (for debug) or run another localization node:
+##### Terminal 4: ROS Bag or streaming camera
+
+Download sample data:
 ```bash
-rosrun detr_tf fake_tf_publisher.py
+cd ~/huggingface-detr
+mkdir -p bags
+cd bags
+wget ftp://140.113.148.83/arg-projectfile-download/south-tw-maritime-multi-modal-dataset/Ball-image-bag/KS-open-sea-0610-camera-raw-target-ball-example.bag
+cd ~/huggingface-detr
 ```
+
+Play ROS Bag
+```bash
+rosbag play bags/KS-open-sea-0610-camera-raw-target-ball-example.bag -l
+```
+
+##### Terminal 5: stitching
 
 In [opencv-cuda-docker](https://github.com/JetSeaAI/opencv-cuda-docker) repo
 
@@ -245,3 +263,22 @@ source docker_run.sh
 source environment.sh 127.0.0.1 127.0.0.1
 roslaunch pano_with_distance pano_with_distance_JS5.launch
 ```
+
+##### Foxglove
+
+If you haven't installed the Foxglove app, download it from [Foxglove](https://foxglove.dev/download) (choose the "x86" version).
+
+After launching the app:
+
+* Go to **Layout** > **+ Add** > **Import Personal Layout**
+* Select: `~/huggingface-detr/foxglove/detr-w-distance-angle.json`
+* Then click **Open**
+
+To open the ROS1 connection:
+
+* Click the top-left Foxglove logo
+* Select **Open Connection**
+* Select **ROS 1**
+* Then click **Open**
+
+<img src="example/detr-w-ID-tracking-w-visual-distance-measuring.gif" alt="detr-w-ID-tracking-w-visual-distance-measuring" width="600" height="auto" />
