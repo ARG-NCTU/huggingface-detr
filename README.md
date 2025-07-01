@@ -185,7 +185,7 @@ source environment_ros1.sh
 Download DETR model from huggingface hub
 
 ```bash
-roslaunch detr_inference download_model.launch
+roslaunch detr_inference hf_account_name:=XXX download_model.launch hf_repo_name:=XXX
 ```
 
 #### ROS1 Inference local DETR model
