@@ -8,6 +8,8 @@ from PIL import Image
 from tqdm import tqdm
 import evaluate
 from dataloader import DETRDataLoader
+import os
+from huggingface_hub import login
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Evaluate DETR model with a custom dataset.')
@@ -150,6 +152,7 @@ def main():
         f.write(str(results))
 
 if __name__ == '__main__':
+    login(token=os.environ["HUGGINGFACE_TOKEN"])
     main()
 
 # Usage:

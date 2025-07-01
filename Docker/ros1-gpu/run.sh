@@ -51,6 +51,7 @@ docker run \
     -e ROS_MASTER_URI=$ROS_MASTER_URI \
     -e ROS_IP=$ROS_IP \
     -e PYTHONPATH=/home/arg/$PROJ_NAME \
+    -e HUGGINGFACE_TOKEN=$HUGGINGFACE_TOKEN \
     -v "$XAUTH:$XAUTH" \
     -v "/tmp/.X11-unix:/tmp/.X11-unix" \
     -v "/etc/localtime:/etc/localtime:ro" \

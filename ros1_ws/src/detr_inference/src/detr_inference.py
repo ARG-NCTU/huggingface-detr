@@ -13,12 +13,16 @@ import rospkg
 import time
 import cv2
 import matplotlib.colors as mcolors
+from huggingface_hub import login
 
 rospack = rospkg.RosPack()
 
 class DetrInferenceNode:
     def __init__(self):
         rospy.init_node('detr_inference', anonymous=True)
+
+        login(token=os.environ["HUGGINGFACE_TOKEN"])
+        
         self.rospack = rospkg.RosPack()
         self.bridge = CvBridge()
 

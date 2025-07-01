@@ -6,6 +6,7 @@ import os
 import shutil
 import threading
 import time
+from huggingface_hub import login
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train DETR model with a custom dataset.')
@@ -153,6 +154,7 @@ def main():
 
 
 if __name__ == '__main__':
+    login(token=os.environ["HUGGINGFACE_TOKEN"])
     main()
 
 # Usage:

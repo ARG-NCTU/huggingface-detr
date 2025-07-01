@@ -1,5 +1,6 @@
 data/
 images*/
+images.zip
 data_boat/
 extracted_image/
 dgx_gpu_flat.tar
@@ -30,3 +31,6 @@ git_log_short.txt
 ros1_ws/src/detr_inference/model
 
 bags/
+train-*.sh
+eval-*.sh
+inference-*.sh

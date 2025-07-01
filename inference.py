@@ -6,6 +6,7 @@ from transformers import AutoImageProcessor, AutoModelForObjectDetection
 from PIL import Image, ImageDraw, ImageFont
 from tqdm import tqdm
 import numpy as np
+from huggingface_hub import login
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Run inference with DETR model on an image or video.')
@@ -118,6 +119,7 @@ def main():
         print("Unsupported file format. Please provide an image or video file.")
 
 if __name__ == '__main__':
+    login(token=os.environ["HUGGINGFACE_TOKEN"])
     main()
 
 # Usage:

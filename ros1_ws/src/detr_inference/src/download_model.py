@@ -3,10 +3,13 @@ import os
 import rospy
 import rospkg
 from huggingface_hub import hf_hub_download
+from huggingface_hub import login
 
 class HFModelDownloader:
     def __init__(self):
         rospy.init_node("hf_model_downloader", anonymous=True)
+
+        login(token=os.environ["HUGGINGFACE_TOKEN"])
 
         self.account_name = rospy.get_param("~hf_account_name", None)
         self.repo_name = rospy.get_param("~hf_repo_name", None)

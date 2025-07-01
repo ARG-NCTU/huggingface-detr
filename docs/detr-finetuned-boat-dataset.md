@@ -76,21 +76,21 @@ cd ~/huggingface-detr/
 ```bash
 python3 train.py \
 --save_model_hub_id ARG-NCTU \
---save_model_repo_id detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset \
---load_model_hub_id ARG-NCTU \
---load_model_repo_id detr-resnet-50-finetuned-600-epochs-TW-Marine-2cls-dataset \
+--save_model_repo_id detr-resnet-50-finetuned-20-epochs-Boat-dataset \
+--load_model_hub_id facebook \
+--load_model_repo_id detr-resnet-50 \
 --dataset_hub_id ARG-NCTU \
---dataset_repo_id TW_Marine_5cls_dataset \
---dataset_format parquet \
---epoch 600 \
---batch_size 2 \
+--dataset_repo_id Boat_dataset_2024 \
+--dataset_format jsonl \
+--epoch 20 \
+--batch_size 8 \
 --learning_rate 1e-5 \
 --weight_decay 1e-4 \
 --logging_steps 50 \
---save_total_limit 5 \
---classes_path data/TW_Marine_5cls_classes.txt \
+--save_total_limit 100 \
+--classes_path data/classes.txt \
 --image_height 480 \
---image_width 1920 \
+--image_width 640 \
 --device cuda
 ```
 
@@ -98,6 +98,15 @@ Or modify the train.sh and run it:
 
 ```bash
 source train.sh
+```
+
+Upload model weights to hub (If push_to_hub not working)
+
+```bash
+huggingface-cli upload ARG-NCTU/detr-resnet-50-finetuned-20-epochs-Boat-dataset \
+detr-resnet-50-finetuned-20-epochs-Boat-dataset \
+--repo-type=model \
+--commit-message="Upload model weights to hub"
 ```
 
 Use tensorboard to see training logs
@@ -111,15 +120,15 @@ tensorboard --logdir=detr-resnet-50-finetuned-20-epochs-Boat-dataset/runs
 ```bash
 python3 eval.py \
 --hub_id ARG-NCTU \
---repo_id detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset \
+--repo_id detr-resnet-50-finetuned-20-epochs-Boat-dataset \
 --dataset_hub_id ARG-NCTU \
---dataset_repo_id TW_Marine_5cls_dataset \
---dataset_format parquet \
---classes_path data/TW_Marine_5cls_classes.txt \
+--dataset_repo_id Boat_dataset_2024 \
+--dataset_format jsonl \
+--classes_path data/classes.txt \
 --image_height 480 \
---image_width 1920 \
---batch_size 2 \
---num_workers 2 \
+--image_width 640 \
+--batch_size 8 \
+--num_workers 4 \
 --device cuda
 ```
 
@@ -131,14 +140,14 @@ source eval.sh
 
 ### Inferencing
 
-Download Source Videos [Link](http://gofile.me/773h8/lEoYNb3yi)
+Download Source Videos [Link](http://gofile.me/773h8/baC1yKEOm)
 
 ```bash
 python3 inference.py \
 --hub_id ARG-NCTU \
---repo_id detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset \
---input_path source_videos/S1_ch1234_20250610_1255.mp4 \
---output_path output_videos/S1_ch1234_20250610_1255_output.mp4 \
+--repo_id detr-resnet-50-finetuned-20-epochs-Boat-dataset \
+--input_path source_videos/Multi_Boat.mp4 \
+--output_path output_videos/Multi_Boat.mp4 \
 --confidence_threshold 0.5
 ```
 

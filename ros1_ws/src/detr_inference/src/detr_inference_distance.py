@@ -21,12 +21,15 @@ import rospy
 import tf2_ros
 import tf2_geometry_msgs
 from geometry_msgs.msg import PoseStamped
+from huggingface_hub import login
 
 rospack = rospkg.RosPack()
 
 class DetrInferenceSearchingDistanceNode:
     def __init__(self):
         rospy.init_node('detr_inference_distance', anonymous=True)
+
+        login(token=os.environ["HUGGINGFACE_TOKEN"])
         
         self.rospack = rospkg.RosPack()
         self.bridge = CvBridge()
