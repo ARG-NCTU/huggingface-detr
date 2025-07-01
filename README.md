@@ -49,18 +49,35 @@ python3 test_gpu.py
 
 ## Prepare Dataset
 
-Download HuggingFace dataset:
+Download images of the HuggingFace dataset:
 
 ```bash
-huggingface-cli download ARG-NCTU/Boat_dataset_2024 \
+huggingface-cli download ARG-NCTU/TW_Marine_5cls_dataset \
 --repo-type dataset \
---local-dir ~/huggingface-detr
+--local-dir ~/huggingface-detr \
+--local-dir-use-symlinks False \
+--include "data/images.zip"
 ```
 
 Unzip images:
 
 ```bash
 unzip ~/huggingface-detr/data/images.zip -d ~/huggingface-detr/
+```
+
+Download classes of the HuggingFace dataset:
+
+```bash
+huggingface-cli download ARG-NCTU/TW_Marine_5cls_dataset \
+--repo-type dataset \
+--local-dir ~/huggingface-detr \
+--local-dir-use-symlinks False \
+--include "data/classes.txt"
+```
+
+Rename the classes file
+```bash
+mv ~/huggingface-detr/data/classes.txt ~/huggingface-detr/data/TW_Marine_5cls_classes.txt
 ```
 
 ## Training, Evaluation, Inferencing
@@ -82,7 +99,7 @@ python3 train.py \
 --dataset_hub_id ARG-NCTU \
 --dataset_repo_id TW_Marine_5cls_dataset \
 --dataset_format parquet \
---epoch 600 \
+--epoch 450 \
 --batch_size 2 \
 --learning_rate 1e-5 \
 --weight_decay 1e-4 \
