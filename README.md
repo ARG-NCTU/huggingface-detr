@@ -99,7 +99,7 @@ python3 train.py \
 --dataset_hub_id ARG-NCTU \
 --dataset_repo_id TW_Marine_5cls_dataset \
 --dataset_format parquet \
---epoch 450 \
+--epoch 600 \
 --batch_size 2 \
 --learning_rate 1e-5 \
 --weight_decay 1e-4 \
