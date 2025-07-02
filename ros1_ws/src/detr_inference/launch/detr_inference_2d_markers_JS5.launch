@@ -1,0 +1,27 @@
+<launch>
+
+    <arg name="pub_detection_image" default="true"/>
+    
+    <arg name="hub_id" default="ARG-NCTU"/>
+    <arg name="repo_id" default="detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset"/>
+
+    <arg name="classes_path" default="$(find detr_inference)/classes/TW_Marine_5cls.txt"/>
+
+    <arg name="confidence_threshold" default="0.5"/>
+
+    <node name="detr_inference_2d_markers" pkg="detr_inference" type="detr_inference_2d_markers.py" output="screen">
+        <param name="sub_camera_topic" value="/camera_pano_stitched/image_raw/compressed"/>
+        <param name="pub_camera_topic" value="/detr/compressed"/>
+        <param name="pub_marker_array_topic" value="/detr/camera_pano_stitched/bboxes"/>
+        <param name="hub_id" value="$(arg hub_id)"/>
+        <param name="repo_id" value="$(arg repo_id)"/>
+        <param name="classes_path" value="$(arg classes_path)"/>
+        <param name="confidence_threshold" value="$(arg confidence_threshold)"/>
+        <param name="pub_detection_image" value="$(arg pub_detection_image)"/>
+        <param name="keep_frame_ratio" value="0.3"/>
+        <param name="max_missed" value="10"/>
+        <param name="max_distance_threshold" value="100"/>
+        <param name="max_id" value="10"/>
+    </node>
+
+</launch>

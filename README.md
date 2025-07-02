@@ -123,6 +123,15 @@ Use tensorboard to see training logs
 tensorboard --logdir=detr-resnet-50-finetuned-20-epochs-Boat-dataset/runs
 ```
 
+Upload model weights to hub (If push_to_hub not working)
+
+```bash
+huggingface-cli upload detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset \
+detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset \
+--repo-type=model \
+--commit-message="Upload model weights to hub"
+```
+
 ### Evaluation
 
 ```bash
@@ -224,7 +233,7 @@ Refer this guide [link](https://github.com/ARG-NCTU/perception-fusion/blob/main/
 
 ```bash
 roslaunch detr_inference download_model.launch hf_repo_name:=detr-resnet-50-finetuned-600-epochs-GuardBoat-dataset
-roslaunch detr_inference detr_inference_marker.launch 
+roslaunch detr_inference detr_inference_2d_markers_GJS.launch
 ```
 
 Refer this guide [link (CPU version)](https://github.com/ARG-NCTU/perception-fusion/blob/main/docs/lidar-radar-cluster-3d-bbox-detr-2d-bbox-matching-ros2.md) or this guide [link (GPU version)](https://github.com/ARG-NCTU/perception-fusion/blob/main/docs/lidar-radar-cluster-3d-bbox-detr-2d-bbox-matching-ros2-gpu.md) for further step of matching poincloud clustered 3D bbox & DETR 2D Bbox.
@@ -241,7 +250,7 @@ roscore
 
 ```bash
 roslaunch detr_inference download_model.launch hf_repo_name:=detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset
-roslaunch detr_inference detr_inference_distance.launch 
+roslaunch detr_inference detr_inference_3d_markers_JS5.launch
 ```
 
 ##### Terminal 3: static tf or run another localization node
