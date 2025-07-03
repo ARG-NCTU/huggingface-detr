@@ -34,6 +34,7 @@
         <param name="max_missed" value="10"/>
         <param name="max_distance_threshold" value="100"/>
         <param name="max_id" value="10"/>
+        <param name="timeout_no_detection" value="2.0"/>
     </node>
 
 </launch>

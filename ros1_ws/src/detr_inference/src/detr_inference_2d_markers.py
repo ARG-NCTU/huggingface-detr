@@ -62,7 +62,7 @@ class DetrInference2DMarkersNode:
             3: self.name_to_bgr("green"),
         }
 
-        self.previous_objects = {}  # {id: {'center': (x, y), 'missed': int}}
+        self.previous_objects = {}
         self.tracked_ids_in_this_frame = set()
         self.id_counter = 0
 
@@ -88,7 +88,7 @@ class DetrInference2DMarkersNode:
         self.keep_frame_ratio = min(rospy.get_param('~keep_frame_ratio', 0.3), 1.0)
         self.keep_frame = int(1 / self.keep_frame_ratio)
         # ID tracking
-        self.max_missed = rospy.get_param('~max_missed', 3)
+        self.max_missed_sec = rospy.get_param('~max_missed_sec', 0.5)
         self.max_distance_threshold = rospy.get_param('~max_distance_threshold', 50)
         self.max_id = rospy.get_param('~max_id', 10)
 
@@ -188,7 +188,7 @@ class DetrInference2DMarkersNode:
                 labels = detections["labels"].detach().cpu().numpy().tolist()
                 boxes = detections["boxes"].detach().cpu().numpy().astype(np.int32).tolist()
                 
-                rospy.loginfo(f"scores: {scores}, labels: {labels}, boxes: {boxes}")
+                # rospy.loginfo(f"scores: {scores}, labels: {labels}, boxes: {boxes}")
                 
                 current_bboxes = []
                 for score, label_id, box in zip(scores, labels, boxes):
@@ -206,7 +206,11 @@ class DetrInference2DMarkersNode:
                     for cx, cy, info in current_bboxes:
                         new_id = self.get_next_available_id()
                         score, class_name, box = info
-                        self.previous_objects[new_id] = {'center': (cx, cy), 'box': box, 'missed': 0}
+                        self.previous_objects[new_id] = {
+                            'center': (cx, cy),
+                            'box': box,
+                            'last_seen_time': time.time()
+                        }
                         matched_results.append((new_id, score, class_name, box))
 
                     self.tracked_ids_in_this_frame = set([r[0] for r in matched_results])
@@ -316,7 +320,7 @@ class DetrInference2DMarkersNode:
             score, class_name, box = info
 
             matched_result.append((pid, score, class_name, box))
-            self.previous_objects[pid] = {'center': (cx, cy), 'box': box, 'missed': 0}
+            self.previous_objects[pid] = {'center': (cx, cy), 'box': box, 'last_seen_time': time.time()}
             self.tracked_ids_in_this_frame.add(pid)
 
             used_prev_ids.add(pid)
@@ -331,15 +335,15 @@ class DetrInference2DMarkersNode:
                 continue
             score, class_name, box = info
             matched_result.append((new_id, score, class_name, box))
-            self.previous_objects[new_id] = {'center': (cx, cy), 'box': box, 'missed': 0}
+            self.previous_objects[new_id] = {'center': (cx, cy), 'box': box, 'last_seen_time': time.time()}
             self.tracked_ids_in_this_frame.add(new_id)
 
         # Update missed count for unmatched previous objects
         for obj_id in list(self.previous_objects.keys()):
             if obj_id not in self.tracked_ids_in_this_frame:
-                self.previous_objects[obj_id]['missed'] += 1
-                if self.previous_objects[obj_id]['missed'] >= self.max_missed:
+                if time.time() - self.previous_objects[obj_id]['last_seen_time'] > self.max_missed_sec:
                     del self.previous_objects[obj_id]
+
 
         return matched_result
 

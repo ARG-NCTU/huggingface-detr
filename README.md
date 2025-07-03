@@ -38,7 +38,7 @@ source gpu_run.sh
 More terminal:
 
 ```bash
-source gpu_join.sh
+source gpu_run.sh
 ```
 
 GPU test:
@@ -176,53 +176,33 @@ source inference.sh
 
 ### Build ROS1 Workspace
 
-Enter the repo
-
 ```bash
-cd ~/huggingface-detr/
-```
-
-Setup ROS
-
-```bash
-source environment_ros1.sh 
-```
-
-Clean catkin ws
-
-```bash
-source clean_ros1_all.sh
-```
-
-Build catkin ws
-
-```bash
+cd ~/huggingface-detr
+source gpu_run.sh
+source environment_ros1.sh
+source clean_ros1_ws.sh
 source build_ros1_all.sh
+exit
 ```
 
 ### ROS1 Inference
 
-Setup ROS
-
-```bash
-source environment_ros1.sh 
-```
-
-Download DETR model from huggingface hub
-
-```bash
-roslaunch detr_inference hf_account_name:=XXX download_model.launch hf_repo_name:=XXX
-```
-
 #### ROS1 Inference local DETR model
 
 ```bash
+cd ~/huggingface-detr
+source gpu_run.sh
+source environment_ros1.sh
+roslaunch detr_inference download_model.launch
 roslaunch detr_inference detr_inference.launch 
 ```
 
 #### ROS1 Inference local DETR model for visual servoing
 
 ```bash
+cd ~/huggingface-detr
+source gpu_run.sh
+source environment_ros1.sh
 roslaunch detr_inference download_model.launch hf_repo_name:=detr-resnet-50-finetuned-600-epochs-KS-Buoy-dataset
 roslaunch detr_inference detr_inference_searching.launch 
 ```
@@ -232,6 +212,9 @@ Refer this guide [link](https://github.com/ARG-NCTU/perception-fusion/blob/main/
 #### ROS1 Inference local DETR model for pointcloud clustered bbox matching
 
 ```bash
+cd ~/huggingface-detr
+source gpu_run.sh
+source environment_ros1.sh
 roslaunch detr_inference download_model.launch hf_repo_name:=detr-resnet-50-finetuned-600-epochs-GuardBoat-dataset
 roslaunch detr_inference detr_inference_2d_markers_GJS.launch
 ```
@@ -243,12 +226,18 @@ Refer this guide [link (CPU version)](https://github.com/ARG-NCTU/perception-fus
 ##### Terminal 1: ROSCORE
 
 ```bash
+cd ~/huggingface-detr
+source gpu_run.sh
+source environment_ros1.sh
 roscore
 ```
 
 ##### Terminal 2: DETR with ID tracking for distance & angle detection
 
 ```bash
+cd ~/huggingface-detr
+source gpu_run.sh
+source environment_ros1.sh
 roslaunch detr_inference download_model.launch hf_repo_name:=detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset
 roslaunch detr_inference detr_inference_3d_markers_JS5.launch
 ```
@@ -256,6 +245,9 @@ roslaunch detr_inference detr_inference_3d_markers_JS5.launch
 ##### Terminal 3: static tf or run another localization node
 
 ```bash
+cd ~/huggingface-detr
+source gpu_run.sh
+source environment_ros1.sh
 roslaunch detr_tf static_tf.launch
 ```
 
@@ -272,6 +264,9 @@ cd ~/huggingface-detr
 
 Play ROS Bag
 ```bash
+cd ~/huggingface-detr
+source gpu_run.sh
+source environment_ros1.sh
 rosbag play bags/KS-open-sea-0610-camera-raw-target-ball-example.bag -l
 ```
 
