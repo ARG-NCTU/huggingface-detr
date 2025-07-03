@@ -22,6 +22,7 @@ import tf2_ros
 import tf2_geometry_msgs
 from geometry_msgs.msg import PoseStamped
 from scipy.optimize import linear_sum_assignment
+from filterpy.kalman import KalmanFilter
 from huggingface_hub import login
 
 rospack = rospkg.RosPack()
@@ -61,9 +62,6 @@ class DetrInferenceSearchingDistanceNode:
         self.cam_ext_rotation = [-60, 0, 60]
         self.hfov = 60.0
 
-        self.previous_bboxes = []
-        self.next_id = 0
-
         self.fixed_id_colors = {
             0: self.name_to_bgr("red"),
             1: self.name_to_bgr("orange"),
@@ -71,7 +69,7 @@ class DetrInferenceSearchingDistanceNode:
             3: self.name_to_bgr("green"),
         }
 
-        self.previous_objects = {}  # {id: {'center': (x, y), 'missed': int}}
+        self.previous_objects = {}
         self.tracked_ids_in_this_frame = set()
         self.id_counter = 0
         
@@ -252,7 +250,7 @@ class DetrInferenceSearchingDistanceNode:
                 
                 # rospy.loginfo(f"scores: {scores}, labels: {labels}, boxes: {boxes}")
                 
-                current_bboxes = []
+                self.current_bboxes = []
                 for score, label_id, box in zip(scores, labels, boxes):
                     x1, y1, x2, y2 = box
                     cx = (x1 + x2) / 2
@@ -277,29 +275,27 @@ class DetrInferenceSearchingDistanceNode:
                         continue
 
                     class_name = self.model.config.id2label[label_id]
-                    current_bboxes.append((cx, cy, (score, class_name, box, distance, angle)))
+                    self.current_bboxes.append((cx, cy, (score, class_name, box, distance, angle)))
                 
                 # If no object in previous frame
-                if not hasattr(self, 'previous_bboxes') or not self.previous_bboxes:
+                if not self.previous_objects:
                     rospy.loginfo("First frame - assigning new IDs to all objects")
                     matched_results = []
-                    for cx, cy, info in current_bboxes:
+                    for cx, cy, info in self.current_bboxes:
                         new_id = self.get_next_available_id()
                         score, class_name, box, distance, angle = info
                         self.previous_objects[new_id] = {
-                            'center': (cx, cy),
-                            'box': box,
-                            'last_seen_time': time.time()
+                            'kf': self.create_kalman_filter(cx, cy),
+                            'last_seen_time': time.time(),
+                            'box': box
                         }
                         matched_results.append((new_id, score, class_name, box, distance, angle))
 
                     self.tracked_ids_in_this_frame = set([r[0] for r in matched_results])
-                    self.previous_bboxes = [(obj_id, self.previous_objects[obj_id]['center']) for obj_id in self.tracked_ids_in_this_frame]
                     return
                 
                 # Perform matching
-                matched_results = self.match_bboxes_by_distance_and_iou(self.previous_bboxes, current_bboxes)
-                self.previous_bboxes = [(obj_id, self.previous_objects[obj_id]['center']) for obj_id in self.tracked_ids_in_this_frame]
+                matched_results = self.match_bboxes_by_distance_and_iou()
                 
                 if matched_results:
                     self.detected = True
@@ -467,8 +463,25 @@ class DetrInferenceSearchingDistanceNode:
 
         return interArea / unionArea if unionArea > 0 else 0.0
 
+    def create_kalman_filter(self, cx, cy):
+        kf = KalmanFilter(dim_x=4, dim_z=2)
+        dt = 1.0  
 
-    def match_bboxes_by_distance_and_iou(self, prev_boxes, curr_boxes):
+        kf.F = np.array([[1, 0, dt, 0],
+                        [0, 1, 0, dt],
+                        [0, 0, 1, 0],
+                        [0, 0, 0, 1]])
+        kf.H = np.array([[1, 0, 0, 0],
+                        [0, 1, 0, 0]])
+
+        kf.x = np.array([cx, cy, 0, 0])  
+        kf.P *= 1000.
+        kf.R *= 10.
+        kf.Q = np.eye(4)
+
+        return kf
+
+    def match_bboxes_by_distance_and_iou(self):
         """
         prev_boxes: list of (id, (cx, cy))
         curr_boxes: list of (cx, cy, (score, class_name, box, distance, angle))
@@ -476,6 +489,15 @@ class DetrInferenceSearchingDistanceNode:
         """
         matched_result = []
         self.tracked_ids_in_this_frame = set()
+
+        prev_boxes = []
+        for obj_id, obj in self.previous_objects.items():
+            kf = obj['kf']
+            kf.predict()
+            pred_cx, pred_cy = kf.x[:2]
+            prev_boxes.append((obj_id, (pred_cx, pred_cy)))
+
+        curr_boxes = self.current_bboxes
 
         num_prev = len(prev_boxes)
         num_curr = len(curr_boxes)
@@ -506,7 +528,6 @@ class DetrInferenceSearchingDistanceNode:
         # rospy.loginfo(f"row indexes: {row_ind}, col_indexes: {col_ind}")
 
         used_curr_indices = set()
-        used_prev_ids = set()
 
         for i, j in zip(row_ind, col_ind):
             if cost_matrix[i, j] == np.inf:
@@ -517,10 +538,14 @@ class DetrInferenceSearchingDistanceNode:
             score, class_name, box, distance, angle = info
 
             matched_result.append((pid, score, class_name, box, distance, angle))
-            self.previous_objects[pid] = {'center': (cx, cy), 'box': box, 'last_seen_time': time.time()}
-            self.tracked_ids_in_this_frame.add(pid)
 
-            used_prev_ids.add(pid)
+            kf = self.previous_objects[pid]['kf']
+            kf.update(np.array([cx, cy]))
+
+            self.previous_objects[pid]['last_seen_time'] = time.time()
+            self.previous_objects[pid]['box'] = box
+
+            self.tracked_ids_in_this_frame.add(pid)
             used_curr_indices.add(j)
 
         # For unmatched current boxes, assign new IDs
@@ -532,7 +557,11 @@ class DetrInferenceSearchingDistanceNode:
                 continue
             score, class_name, box, distance, angle = info
             matched_result.append((new_id, score, class_name, box, distance, angle))
-            self.previous_objects[new_id] = {'center': (cx, cy), 'box': box, 'last_seen_time': time.time()}
+            self.previous_objects[new_id] = {
+                'kf': self.create_kalman_filter(cx, cy),
+                'last_seen_time': time.time(),
+                'box': box
+            }
             self.tracked_ids_in_this_frame.add(new_id)
 
         # Update missed count for unmatched previous objects

@@ -124,6 +124,11 @@ RUN pip3 install \
     tensorboard \
     protobuf==3.20.3
 
+##################################### Kalman Filter #####################################
+
+RUN pip3 install \
+    filterpy
+
 ##################################### setting ###################################################
 
 RUN chown -R ${USER}:${USER} ${HOME}/
