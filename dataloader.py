@@ -213,6 +213,9 @@ if __name__ == "__main__":
 
     # 🔷 Get the first example
     first_raw = raw_ds[0]
+    print("=" * 50)
+    print(f"First data example: {first_raw}")
+    print("=" * 50)
     img_pil = first_raw["image"]                     # PIL.Image
     img_raw = np.array(img_pil)[:, :, ::-1]         # Convert to HWC, BGR (for OpenCV)
     bbox = first_raw["objects"]["bbox"]             # COCO format [x, y, w, h]
