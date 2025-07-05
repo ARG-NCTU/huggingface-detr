@@ -6,6 +6,10 @@ from PIL import Image
 import os
 import numpy as np
 import albumentations as A
+import matplotlib.pyplot as plt
+import argparse
+import torch
+import cv2
 
 
 class DETRDataLoader:
@@ -163,3 +167,119 @@ class DETRDataLoader:
     def get_dataloader(self, batch_size=8):
         """Return a DataLoader for training."""
         return DataLoader(self.dataset["train"], batch_size=batch_size, shuffle=True, collate_fn=self.collate_fn)
+
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='DETR DataLoader Augmentation Visualization')
+
+    # Dataset parameters
+    parser.add_argument('--dataset_hub_id', type=str, default='ARG-NCTU', help='Dataset Hugging Face Hub ID')
+    parser.add_argument('--dataset_repo_id', type=str, default='GuardBoat_dataset_2025', help='Dataset Hugging Face repository ID')
+    parser.add_argument('--dataset_format', type=str, choices=['jsonl', 'parquet'], default='parquet', help='Dataset format')
+
+    # Other parameters
+    parser.add_argument('--classes_path', type=str, default='data/GuardBoat_classes.txt', help='Path to class labels file')
+    parser.add_argument('--image_height', type=int, default=480, help='Image height')
+    parser.add_argument('--image_width', type=int, default=1920, help='Image width')
+
+    parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu', help='Device (default: cuda if available)')
+
+    # Output
+    parser.add_argument('--output_path', type=str, default='visualize_aug.png', help='Output image file path')
+
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+
+    args = parse_args()
+
+    loader = DETRDataLoader(
+        dataset_format=args.dataset_format,
+        image_height=args.image_height,
+        image_width=args.image_width,
+        load_model_hub_id="facebook",                   # default model hub
+        load_model_repo_id="detr-resnet-50",            # default model repo
+        dataset_hub_id=args.dataset_hub_id,
+        dataset_repo_id=args.dataset_repo_id,
+        classes_path=args.classes_path
+    )
+
+    # 🔷 Load raw dataset without transform
+    raw_ds = load_dataset(
+        f"{args.dataset_hub_id}/{args.dataset_repo_id}"
+    )["train"]
+
+    # 🔷 Get the first example
+    first_raw = raw_ds[0]
+    img_pil = first_raw["image"]                     # PIL.Image
+    img_raw = np.array(img_pil)[:, :, ::-1]         # Convert to HWC, BGR (for OpenCV)
+    bbox = first_raw["objects"]["bbox"]             # COCO format [x, y, w, h]
+    category = first_raw["objects"]["category"]     # Category IDs
+
+    # 🔷 Define four types of augmentations
+    normal_transform = A.Compose(
+        [], bbox_params=A.BboxParams(format="coco", label_fields=["category"])
+    )
+    hflip_transform = A.Compose(
+        [A.HorizontalFlip(p=1.0)],
+        bbox_params=A.BboxParams(format="coco", label_fields=["category"])
+    )
+    
+    brightness_contrast_aug = A.RandomBrightnessContrast(
+        brightness_limit=(0.1, 0.11),  # brightness = 1 ± 0.9
+        contrast_limit=(0.1, 0.11),
+        p=1.0
+    )
+    enhanced_transform = A.Compose(
+        [brightness_contrast_aug],
+        bbox_params=A.BboxParams(format="coco", label_fields=["category"])
+    )
+    hflip_enhanced_transform = A.Compose(
+        [brightness_contrast_aug, A.HorizontalFlip(p=1.0)],
+        bbox_params=A.BboxParams(format="coco", label_fields=["category"])
+    )
+
+    # 🔷 Prepare transform list
+    transforms = [
+        ("Normal", normal_transform),
+        ("Horizontal Flip", hflip_transform),
+        ("Enhanced Brightness & Contrast", enhanced_transform),
+        ("Horizontal Flip + Enhanced Brightness & Contrast", hflip_enhanced_transform),
+    ]
+
+    fig, axes = plt.subplots(len(transforms), 1, figsize=(12, 20), constrained_layout=True)
+
+    def draw_bboxes(image, bboxes, categories, id2label, color=(0, 0, 255)):
+        """
+        Draw bounding boxes and category IDs on the image.
+        """
+        img_copy = image.copy()
+        for box, cls in zip(bboxes, categories):
+            x, y, w, h = box
+            x1, y1, x2, y2 = int(x), int(y), int(x + w), int(y + h)
+            cv2.rectangle(img_copy, (x1, y1), (x2, y2), color, 2)
+            cls_name = id2label.get(cls, str(cls))
+            cv2.putText(
+                img_copy, cls_name, (x1, y1 - 20),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2
+            )
+        return img_copy
+
+    # 🔷 Apply each transform, draw bounding boxes, and plot
+    for ax, (title, tfm) in zip(axes, transforms):
+        result = tfm(image=img_raw, bboxes=bbox, category=category)
+        img_aug = result["image"]
+        bboxes_aug = result["bboxes"]
+        categories_aug = result["category"]
+
+        img_vis = draw_bboxes(img_aug, bboxes_aug, categories_aug, loader.id2label)
+        ax.imshow(cv2.cvtColor(img_vis, cv2.COLOR_BGR2RGB))
+        ax.set_title(title)
+        ax.axis("off")
+
+    plt.tight_layout()
+    plt.savefig(args.output_path)
+    print(f"✅ Augmentation visualization saved at {args.output_path}")
+    # plt.show()

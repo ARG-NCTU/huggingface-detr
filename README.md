@@ -80,6 +80,19 @@ Rename the classes file
 mv ~/huggingface-detr/data/classes.txt ~/huggingface-detr/data/TW_Marine_5cls_classes.txt
 ```
 
+Check annotations and visualize image augmentation
+```bash
+python3 dataloader.py \
+--dataset_hub_id ARG-NCTU \
+--dataset_repo_id TW_Marine_5cls_dataset \
+--dataset_format parquet \
+--classes_path data/TW_Marine_5cls_classes.txt \
+--image_height 480 \
+--image_width 1920 \
+--device cuda \
+--output_path visualize_aug.png
+```
+
 ## Training, Evaluation, Inferencing
 
 Enter the repo
