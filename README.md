@@ -90,7 +90,8 @@ python3 dataloader.py \
 --image_height 480 \
 --image_width 1920 \
 --device cuda \
---output_path visualize_aug.png
+--output_aug_path visualize_aug.png \
+--output_pad_mask_path visualize_pad_mask.png
 ```
 
 ## Training, Evaluation, Inferencing

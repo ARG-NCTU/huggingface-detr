@@ -186,7 +186,8 @@ def parse_args():
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu', help='Device (default: cuda if available)')
 
     # Output
-    parser.add_argument('--output_path', type=str, default='visualize_aug.png', help='Output image file path')
+    parser.add_argument('--output_aug_path', type=str, default='visualize_aug.png', help='Output image file path')
+    parser.add_argument('--output_pad_mask_path', type=str, default='visualize_pad_mask.png', help='Output image file path')
 
     return parser.parse_args()
 
@@ -282,7 +283,61 @@ if __name__ == "__main__":
         ax.set_title(title)
         ax.axis("off")
 
-    plt.tight_layout()
-    plt.savefig(args.output_path)
-    print(f"✅ Augmentation visualization saved at {args.output_path}")
+    # plt.tight_layout()
+    plt.savefig(args.output_aug_path)
+    print(f"✅ Augmentation visualization saved at {args.output_aug_path}")
     # plt.show()
+
+    # ======================
+    # 🔷 Draw Original + Padded + Mask
+    # ======================
+
+    processed_sample = loader.dataset["train"][0]
+
+    pixel_values = processed_sample["pixel_values"]  # (3,H,W)
+    pixel_mask   = processed_sample["pixel_mask"]    # (H,W)
+
+    # Convert padded image
+    padded_img = pixel_values.permute(1, 2, 0).cpu().numpy()
+    padded_img = (padded_img - padded_img.min()) / (padded_img.max() - padded_img.min()) * 255
+    padded_img = padded_img.astype(np.uint8)
+
+    mask_img = pixel_mask.cpu().numpy().astype(np.uint8) * 255  # 0/1 → 0/255
+
+    # Add black border (width=5 pixels)
+    border_size = 5
+    mask_with_border = cv2.copyMakeBorder(
+        mask_img,
+        top=border_size,
+        bottom=border_size,
+        left=border_size,
+        right=border_size,
+        borderType=cv2.BORDER_CONSTANT,
+        value=0  # black
+    )
+
+    # Original image: already loaded before as img_raw
+    # convert to RGB
+    orig_img_rgb = cv2.cvtColor(img_raw, cv2.COLOR_BGR2RGB)
+
+    # Plot all three
+    fig2, axes2 = plt.subplots(3, 1, figsize=(12, 15), constrained_layout=True)
+
+    axes2[0].imshow(orig_img_rgb)
+    axes2[0].set_title("Original Image")
+    axes2[0].axis("off")
+
+    axes2[1].imshow(padded_img)
+    axes2[1].set_title("Augmented + Padded Image")
+    axes2[1].axis("off")
+
+    axes2[2].imshow(mask_with_border, cmap="gray", vmin=0, vmax=255)
+    axes2[2].set_title("Pixel Mask + Black Border")
+    axes2[2].axis("off")
+
+    # plt.tight_layout()
+    plt.savefig(args.output_pad_mask_path)
+    # plt.show()
+
+    print(f"✅ Saved {args.output_pad_mask_path}")
+
