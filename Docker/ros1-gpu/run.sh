@@ -5,6 +5,17 @@ ARGS=("$@")
 # project variable
 PROJ_NAME="huggingface-detr"
 
+IMG="argnctu/huggingface-detr:ros1-gpu"
+
+CONTAINER_ID=$(docker ps -aqf "ancestor=${IMG}")
+if [ $CONTAINER_ID ]; then
+  echo "Attach to docker container $CONTAINER_ID"
+  xhost +
+  docker exec --privileged -e DISPLAY=${DISPLAY} -e LINES="$(tput lines)" -it ${CONTAINER_ID} bash
+  xhost -
+  return
+fi
+
 # Make sure processes in the container can connect to the x server
 # Necessary so gazebo can create a context for OpenGL rendering (even headless)
 XAUTH=/tmp/.docker.xauth

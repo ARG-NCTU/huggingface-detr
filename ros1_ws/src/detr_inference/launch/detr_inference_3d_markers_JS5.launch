@@ -14,7 +14,7 @@
 
     <arg name="crop_rect" default="[650,120,660,240]"/>
 
-    <node name="detr_inference_distance" pkg="detr_inference" type="detr_inference_distance.py" output="screen">
+    <node name="detr_inference_3d_markers" pkg="detr_inference" type="detr_inference_3d_markers.py" output="screen">
         <param name="sub_camera_topic" value="/camera_pano_stitched/image_raw/compressed"/>
         <param name="sub_camera_annotated_topic" value="/camera_pano_masked/image_raw/compressed"/>
         <param name="pub_camera_topic" value="/detr/compressed"/>
@@ -31,9 +31,10 @@
         <param name="target_frame_id" value="map"/>
         <param name="markers_scale" value="100"/>
         <param name="keep_frame_ratio" value="0.3"/>
-        <param name="max_missed" value="3"/>
-        <param name="max_distance_threshold" value="50"/>
+        <param name="max_missed" value="10"/>
+        <param name="max_distance_threshold" value="100"/>
         <param name="max_id" value="10"/>
+        <param name="timeout_no_detection" value="2.0"/>
     </node>
 
 </launch>

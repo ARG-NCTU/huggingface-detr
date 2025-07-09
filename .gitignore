@@ -8,6 +8,8 @@ dgx_gpu.sqsh
 detr-resnet-50-finetuned-20-epochs-boat-dataset/
 output/
 visualize_anno.jpg
+visualize_aug.png
+visualize_pad_mask.png
 out.jpg
 
 .catkin_tools/

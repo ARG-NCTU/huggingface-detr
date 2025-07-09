@@ -21,6 +21,8 @@ import rospy
 import tf2_ros
 import tf2_geometry_msgs
 from geometry_msgs.msg import PoseStamped
+from scipy.optimize import linear_sum_assignment
+from filterpy.kalman import KalmanFilter
 from huggingface_hub import login
 
 rospack = rospkg.RosPack()
@@ -60,9 +62,6 @@ class DetrInferenceSearchingDistanceNode:
         self.cam_ext_rotation = [-60, 0, 60]
         self.hfov = 60.0
 
-        self.previous_bboxes = []
-        self.next_id = 0
-
         self.fixed_id_colors = {
             0: self.name_to_bgr("red"),
             1: self.name_to_bgr("orange"),
@@ -70,7 +69,7 @@ class DetrInferenceSearchingDistanceNode:
             3: self.name_to_bgr("green"),
         }
 
-        self.previous_objects = {}  # {id: {'center': (x, y), 'missed': int}}
+        self.previous_objects = {}
         self.tracked_ids_in_this_frame = set()
         self.id_counter = 0
         
@@ -78,6 +77,9 @@ class DetrInferenceSearchingDistanceNode:
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
+
+        self.last_detection_time = time.time()
+        self.marker_delete_timer = rospy.Timer(rospy.Duration(0.5), self.check_detection_timeout)
         
 
     def get_fixed_color_for_id(self, obj_id):
@@ -103,9 +105,11 @@ class DetrInferenceSearchingDistanceNode:
         self.keep_frame_ratio = min(rospy.get_param('~keep_frame_ratio', 0.3), 1.0)
         self.keep_frame = int(1 / self.keep_frame_ratio)
         # ID tracking
-        self.max_missed = rospy.get_param('~max_missed', 3)
+        self.max_missed_sec = rospy.get_param('~max_missed_sec', 0.5)
         self.max_distance_threshold = rospy.get_param('~max_distance_threshold', 50)
         self.max_id = rospy.get_param('~max_id', 10)
+
+        self.timeout_no_detection = rospy.get_param('~timeout_no_detection', 2.0)
         
         self.image_width = None
         if crop_str:
@@ -246,7 +250,7 @@ class DetrInferenceSearchingDistanceNode:
                 
                 # rospy.loginfo(f"scores: {scores}, labels: {labels}, boxes: {boxes}")
                 
-                current_bboxes = []
+                self.current_bboxes = []
                 for score, label_id, box in zip(scores, labels, boxes):
                     x1, y1, x2, y2 = box
                     cx = (x1 + x2) / 2
@@ -271,11 +275,27 @@ class DetrInferenceSearchingDistanceNode:
                         continue
 
                     class_name = self.model.config.id2label[label_id]
-                    current_bboxes.append((cx, cy, (score, class_name, box, distance, angle)))
+                    self.current_bboxes.append((cx, cy, (score, class_name, box, distance, angle)))
+                
+                # If no object in previous frame
+                if not self.previous_objects:
+                    rospy.loginfo("First frame - assigning new IDs to all objects")
+                    matched_results = []
+                    for cx, cy, info in self.current_bboxes:
+                        new_id = self.get_next_available_id()
+                        score, class_name, box, distance, angle = info
+                        self.previous_objects[new_id] = {
+                            'kf': self.create_kalman_filter(cx, cy),
+                            'last_seen_time': time.time(),
+                            'box': box
+                        }
+                        matched_results.append((new_id, score, class_name, box, distance, angle))
+
+                    self.tracked_ids_in_this_frame = set([r[0] for r in matched_results])
+                    return
                 
                 # Perform matching
-                matched_results = self.match_bboxes_by_distance(self.previous_bboxes, current_bboxes)
-                self.previous_bboxes = [(obj_id, self.previous_objects[obj_id]['center']) for obj_id in self.tracked_ids_in_this_frame]
+                matched_results = self.match_bboxes_by_distance_and_iou()
                 
                 if matched_results:
                     self.detected = True
@@ -351,6 +371,15 @@ class DetrInferenceSearchingDistanceNode:
                 except CvBridgeError as e:
                     rospy.loginfo('CvBridgeError while converting back: %s', e)
     
+    def check_detection_timeout(self, event):
+        if time.time() - self.last_detection_time > self.timeout_no_detection:
+            rospy.logwarn("Too long without detection — sending DELETEALL marker.")
+            marker_array = MarkerArray()
+            delete_marker = Marker()
+            delete_marker.action = Marker.DELETEALL
+            marker_array.markers.append(delete_marker)
+            self.pub_marker_array.publish(marker_array)
+    
     def unwarp_point(self, pano_pt, M):
         if M is None or pano_pt is None or np.any(np.isnan(pano_pt)):
             return None
@@ -419,49 +448,127 @@ class DetrInferenceSearchingDistanceNode:
         angle = angle_min + (angle_max - angle_min) * x_ratio
         return angle
 
-    def match_bboxes_by_distance(self, prev_boxes, curr_boxes):
+    @staticmethod
+    def compute_iou(box1, box2):
+        # box: (x1, y1, x2, y2)
+        xA = max(box1[0], box2[0])
+        yA = max(box1[1], box2[1])
+        xB = min(box1[2], box2[2])
+        yB = min(box1[3], box2[3])
+
+        interArea = max(0, xB - xA) * max(0, yB - yA)
+        box1Area = (box1[2] - box1[0]) * (box1[3] - box1[1])
+        box2Area = (box2[2] - box2[0]) * (box2[3] - box2[1])
+        unionArea = box1Area + box2Area - interArea
+
+        return interArea / unionArea if unionArea > 0 else 0.0
+
+    def create_kalman_filter(self, cx, cy):
+        kf = KalmanFilter(dim_x=4, dim_z=2)
+        dt = 1.0  
+
+        kf.F = np.array([[1, 0, dt, 0],
+                        [0, 1, 0, dt],
+                        [0, 0, 1, 0],
+                        [0, 0, 0, 1]])
+        kf.H = np.array([[1, 0, 0, 0],
+                        [0, 1, 0, 0]])
+
+        kf.x = np.array([cx, cy, 0, 0])  
+        kf.P *= 1000.
+        kf.R *= 10.
+        kf.Q = np.eye(4)
+
+        return kf
+
+    def match_bboxes_by_distance_and_iou(self):
         """
         prev_boxes: list of (id, (cx, cy))
         curr_boxes: list of (cx, cy, (score, class_name, box, distance, angle))
         return: list of (id, score, class_name, box, distance, angle)
         """
         matched_result = []
-        used_prev_ids = set()
-
         self.tracked_ids_in_this_frame = set()
 
-        for curr in curr_boxes:
-            cx, cy, info = curr
+        prev_boxes = []
+        for obj_id, obj in self.previous_objects.items():
+            kf = obj['kf']
+            kf.predict()
+            pred_cx, pred_cy = kf.x[:2]
+            prev_boxes.append((obj_id, (pred_cx, pred_cy)))
+
+        curr_boxes = self.current_bboxes
+
+        num_prev = len(prev_boxes)
+        num_curr = len(curr_boxes)
+        if num_prev == 0 or num_curr == 0:
+            rospy.loginfo(f"Skipping match: num_prev={num_prev}, num_curr={num_curr}")
+            return matched_result
+
+        cost_matrix = np.full((num_prev, num_curr), fill_value=np.inf)
+
+        for i, (pid, (pcx, pcy)) in enumerate(prev_boxes):
+            prev_box = self.previous_objects[pid]['box']  # You must store 'box' in previous_objects in advance
+            for j, (ccx, ccy, info) in enumerate(curr_boxes):
+                score, class_name, curr_box, distance, angle = info
+                dist = math.hypot(ccx - pcx, ccy - pcy)
+                if dist > self.max_distance_threshold:
+                    continue  # Skip if distance is too large
+
+                norm_dist = dist / self.max_distance_threshold  # Normalize to 0~1
+                iou = self.compute_iou(prev_box, curr_box)
+                cost = norm_dist + (1 - iou)
+                cost_matrix[i, j] = cost
+
+        if np.all(np.isinf(cost_matrix)):
+            rospy.loginfo("All costs are inf — skipping matching for this frame.")
+            return matched_result
+
+        row_ind, col_ind = linear_sum_assignment(cost_matrix)
+        # rospy.loginfo(f"row indexes: {row_ind}, col_indexes: {col_ind}")
+
+        used_curr_indices = set()
+
+        for i, j in zip(row_ind, col_ind):
+            if cost_matrix[i, j] == np.inf:
+                continue  # Invalid match
+
+            pid = prev_boxes[i][0]
+            cx, cy, info = curr_boxes[j]
             score, class_name, box, distance, angle = info
-            min_dist = float("inf")
-            matched_id = None
 
-            for pid, (pcx, pcy) in prev_boxes:
-                if pid in used_prev_ids:
-                    continue
-                dist = math.hypot(cx - pcx, cy - pcy)
-                if dist < min_dist and dist < self.max_distance_threshold:
-                    min_dist = dist
-                    matched_id = pid
+            matched_result.append((pid, score, class_name, box, distance, angle))
 
-            if matched_id is not None:
-                used_prev_ids.add(matched_id)
-            else:
-                matched_id = self.get_next_available_id()
-                if matched_id == -1:
-                    continue
+            kf = self.previous_objects[pid]['kf']
+            kf.update(np.array([cx, cy]))
 
-            matched_result.append((matched_id, score, class_name, box, distance, angle))
-            self.previous_objects[matched_id] = {'center': (cx, cy), 'missed': 0}
-            self.tracked_ids_in_this_frame.add(matched_id)
+            self.previous_objects[pid]['last_seen_time'] = time.time()
+            self.previous_objects[pid]['box'] = box
 
+            self.tracked_ids_in_this_frame.add(pid)
+            used_curr_indices.add(j)
+
+        # For unmatched current boxes, assign new IDs
+        for j, (cx, cy, info) in enumerate(curr_boxes):
+            if j in used_curr_indices:
+                continue
+            new_id = self.get_next_available_id()
+            if new_id == -1:
+                continue
+            score, class_name, box, distance, angle = info
+            matched_result.append((new_id, score, class_name, box, distance, angle))
+            self.previous_objects[new_id] = {
+                'kf': self.create_kalman_filter(cx, cy),
+                'last_seen_time': time.time(),
+                'box': box
+            }
+            self.tracked_ids_in_this_frame.add(new_id)
+
+        # Update missed count for unmatched previous objects
         for obj_id in list(self.previous_objects.keys()):
             if obj_id not in self.tracked_ids_in_this_frame:
-                self.previous_objects[obj_id]['missed'] += 1
-            # rospy.loginfo(f"obj_id={obj_id}, missed={self.previous_objects[obj_id]['missed']}")
-            if self.previous_objects[obj_id]['missed'] >= self.max_missed:
-                # rospy.loginfo(f"missed count for obj_id={obj_id}: {self.previous_objects[obj_id]['missed']}")
-                del self.previous_objects[obj_id]
+                if time.time() - self.previous_objects[obj_id]['last_seen_time'] > self.max_missed_sec:
+                    del self.previous_objects[obj_id]
 
         return matched_result
     
