@@ -131,6 +131,29 @@ Or modify the train.sh and run it:
 source train.sh
 ```
 
+This project supports training and fine-tuning with the following pretrained models:
+
+- **[`facebook/detr-resnet-50`](https://huggingface.co/facebook/detr-resnet-50)**  
+  DETR (DEtection TRansformer) from Facebook.  
+  End-to-end transformer-based object detection model with ResNet-50 backbone.  
+  ✅ Accurate, stable baseline for general object detection tasks.
+
+- **[`hustvl/yolos-tiny`](https://huggingface.co/hustvl/yolos-tiny)**  
+  YOLOS (You Only Look One-level Series), a Vision Transformer (ViT)-based lightweight object detection model.  
+  ✅ Faster and more lightweight.  
+  ⚠️ Slightly lower accuracy compared to DETR.
+
+- **[`microsoft/conditional-detr-resnet-50`](https://huggingface.co/microsoft/conditional-detr-resnet-50)**  
+  Conditional DETR by Microsoft.  
+  Improves DETR by introducing conditional cross-attention for faster convergence and better performance on small objects.  
+  ✅ Faster convergence and better precision.
+
+You can specify the pretrained model to load with the arguments:
+```bash
+--load_model_hub_id <HuggingFace hub org/user> \
+--load_model_repo_id <model repo name>
+
+
 Use tensorboard to see training logs
 
 ```bash
@@ -140,7 +163,7 @@ tensorboard --logdir=detr-resnet-50-finetuned-20-epochs-Boat-dataset/runs
 Upload model weights to hub (If push_to_hub not working)
 
 ```bash
-huggingface-cli upload detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset \
+huggingface-cli upload ARG-NCTU/detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset \
 detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset \
 --repo-type=model \
 --commit-message="Upload model weights to hub"
@@ -154,6 +177,7 @@ python3 eval.py \
 --repo_id detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset \
 --dataset_hub_id ARG-NCTU \
 --dataset_repo_id TW_Marine_5cls_dataset \
+--dataset_choice test \
 --dataset_format parquet \
 --classes_path data/TW_Marine_5cls_classes.txt \
 --image_height 480 \
@@ -252,7 +276,7 @@ roscore
 cd ~/huggingface-detr
 source gpu_run.sh
 source environment_ros1.sh
-roslaunch detr_inference download_model.launch hf_repo_name:=detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset
+roslaunch detr_inference download_model.launch hf_repo_name:=detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset-0709
 roslaunch detr_inference detr_inference_3d_markers_JS5.launch
 ```
 

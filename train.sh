@@ -10,7 +10,7 @@ while true; do
     sleep 5
 
     python3 train.py \
-    --save_model_hub_id BrianLan \
+    --save_model_hub_id ARG-NCTU \
     --save_model_repo_id detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset \
     --load_model_hub_id ARG-NCTU \
     --load_model_repo_id detr-resnet-50-finetuned-600-epochs-TW-Marine-2cls-dataset \

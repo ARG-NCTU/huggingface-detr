@@ -16,19 +16,20 @@ def parse_args():
     
     # Model save/load parameters
     parser.add_argument('--hub_id', type=str, default='ARG-NCTU', help='Hugging Face Hub ID')
-    parser.add_argument('--repo_id', type=str, default='detr-resnet-50-finetuned-600-epochs-Kaohsiung-Port-dataset', help='Model repository ID')
+    parser.add_argument('--repo_id', type=str, default='detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset', help='Model repository ID')
     
     # Dataset parameters
     parser.add_argument('--dataset_hub_id', type=str, default='ARG-NCTU', help='Dataset Hugging Face Hub ID')
-    parser.add_argument('--dataset_repo_id', type=str, default='Kaohsiung_Port_dataset_2024', help='Dataset Hugging Face repository ID')
+    parser.add_argument('--dataset_repo_id', type=str, default='TW_Marine_5cls_dataset', help='Dataset Hugging Face repository ID')
+    parser.add_argument('--dataset_choice', type=str, choices=['val', 'test'], default='test', help='Dataset choice to evaluate: val or test')
     parser.add_argument('--dataset_format', type=str, choices=['jsonl', 'parquet'], default='parquet', help='Dataset format')
     
     # Other parameters
-    parser.add_argument('--classes_path', type=str, default='data/Kaohsiung_Port_classes.txt', help='Path to class labels file')
+    parser.add_argument('--classes_path', type=str, default='data/TW_Marine_5cls_classes.txt', help='Path to class labels file')
     parser.add_argument('--image_height', type=int, default=480, help='Image height')
     parser.add_argument('--image_width', type=int, default=1920, help='Image width')
-    parser.add_argument('--batch_size', type=int, default=8, help='Batch size for evaluation')
-    parser.add_argument('--num_workers', type=int, default=4, help='Number of workers for DataLoader')
+    parser.add_argument('--batch_size', type=int, default=2, help='Batch size for evaluation')
+    parser.add_argument('--num_workers', type=int, default=2, help='Number of workers for DataLoader')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu', help='Device (default: cuda if available)')
     
     return parser.parse_args()
@@ -118,7 +119,10 @@ def main():
         dataset_repo_id=args.dataset_repo_id,
         classes_path=args.classes_path,
     )
-    eval_dataset = dataloader.dataset["validation"]
+    if args.dataset_choice == 'val':
+        eval_dataset = dataloader.dataset["validation"]
+    else:
+        eval_dataset = dataloader.dataset["test"]
     collate_fn = dataloader.collate_fn
     im_processor = AutoImageProcessor.from_pretrained(f"{args.hub_id}/{args.repo_id}")
     path_output, path_anno = save_annotation_file_images(eval_dataset, dataloader.id2label)
@@ -155,9 +159,3 @@ if __name__ == '__main__':
     login(token=os.environ["HUGGINGFACE_TOKEN"])
     main()
 
-# Usage:
-# python3 eval.py --hub_id ARG-NCTU --repo_id detr-resnet-50-finetuned-600-epochs-Kaohsiung-Port-dataset --dataset_hub_id ARG-NCTU --dataset_repo_id Kaohsiung_Port_dataset_2024 --dataset_format parquet --classes_path data/Kaohsiung_Port_classes.txt --image_height 480 --image_width 1920 --batch_size 8 --num_workers 4 --device cuda
-
-# python3 eval.py --hub_id ARG-NCTU --repo_id detr-resnet-50-finetuned-600-epochs-KS-Buoy-dataset --dataset_hub_id ARG-NCTU --dataset_repo_id KS_Buoy_dataset_2025 --dataset_format parquet --classes_path data/KS_Buoy_classes.txt --image_height 480 --image_width 1920 --batch_size 8 --num_workers 4 --device cuda
-
-# python3 eval.py --hub_id ARG-NCTU --repo_id detr-resnet-50-finetuned-20-epochs-Boat-dataset-0314 --dataset_hub_id ARG-NCTU --dataset_repo_id Boat_dataset_2024 --dataset_format jsonl --classes_path data/boat_classes.txt --image_height 480 --image_width 640 --batch_size 8 --num_workers 4 --device cuda

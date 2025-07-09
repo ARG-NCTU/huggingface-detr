@@ -14,31 +14,32 @@ from huggingface_hub import login
 from PIL import Image
 import json
 import matplotlib.pyplot as plt
+from eval import save_annotation_file_images, val_formatted_anns, CocoDetection
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train DETR model with a custom dataset.')
     
     # Model save/load parameters
     parser.add_argument('--save_model_hub_id', type=str, default='ARG-NCTU', help='Save model to Hugging Face Hub ID')
-    parser.add_argument('--save_model_repo_id', type=str, default='detr-resnet-50-finetuned-600-epochs-Kaohsiung-Port-dataset', help='Save model to Hugging Face repository ID')
+    parser.add_argument('--save_model_repo_id', type=str, default='detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset', help='Save model to Hugging Face repository ID')
     parser.add_argument('--load_model_hub_id', type=str, default='facebook', help='Load model from Hugging Face Hub ID')
     parser.add_argument('--load_model_repo_id', type=str, default='detr-resnet-50', help='Load model from Hugging Face repository ID')
 
     # Dataset parameters
     parser.add_argument('--dataset_hub_id', type=str, default='ARG-NCTU', help='Dataset Hugging Face Hub ID')
-    parser.add_argument('--dataset_repo_id', type=str, default='Kaohsiung_Port_dataset_2024', help='Dataset Hugging Face repository ID')
+    parser.add_argument('--dataset_repo_id', type=str, default='TW_Marine_5cls_dataset', help='Dataset Hugging Face repository ID')
     parser.add_argument('--dataset_format', type=str, choices=['jsonl', 'parquet'], default='parquet', help='Dataset format')
 
     # Training parameters
     parser.add_argument('--epoch', type=int, default=600, help='Number of training epochs')
-    parser.add_argument('--batch_size', type=int, default=8, help='Batch size for training')
+    parser.add_argument('--batch_size', type=int, default=2, help='Batch size for training')
     parser.add_argument('--learning_rate', type=float, default=1e-5, help='Learning rate')
     parser.add_argument('--weight_decay', type=float, default=1e-4, help='Weight decay')
     parser.add_argument('--logging_steps', type=int, default=50, help='Logging steps interval')
     parser.add_argument('--save_total_limit', type=int, default=100, help='Total limit for model checkpoints')
 
     # Other parameters
-    parser.add_argument('--classes_path', type=str, default='data/Kaohsiung_Port_classes.txt', help='Path to class labels file')
+    parser.add_argument('--classes_path', type=str, default='data/TW_Marine_5cls_classes.txt', help='Path to class labels file')
     parser.add_argument('--image_height', type=int, default=480, help='Image height')
     parser.add_argument('--image_width', type=int, default=1920, help='Image width')
 
@@ -51,13 +52,23 @@ def parse_args():
 
 # Custom Trainer class to handle custom push logic
 class CustomTrainer(Trainer):
-    def __init__(self, *args, val_coco_dataset=None, image_processor=None, id2label=None, **kwargs):
+    def __init__(self, *args, val_coco_dataset=None, image_processor=None, id2label=None, output_dir=None, save_total_limit=None, **kwargs):
         self.val_coco_dataset = val_coco_dataset
         self.image_processor = image_processor
         self.id2label = id2label
+        self.output_dir = output_dir
+        self.save_total_limit = save_total_limit
         self.validation_history = {
             "iou_bbox": {}
         }
+        self.validation_history_file_path = os.path.join(self.output_dir, "validation_history.json")
+        if os.path.exists(self.validation_history_file_path):
+            try:
+                with open(self.validation_history_file_path, "r") as f:
+                    self.validation_history = json.load(f)
+                print("[CustomTrainer] Loaded existing validation_history.json.")
+            except Exception as e:
+                print(f"[CustomTrainer] Failed to load validation_history.json: {e}")
         super().__init__(*args, **kwargs)
 
     def perform_validation(self):
@@ -87,13 +98,56 @@ class CustomTrainer(Trainer):
         results = module.compute()
         print(f"Validation results at epoch {int(self.state.epoch)}: {results}")
 
+        current_epoch = int(self.state.epoch)
+        print(f"Validation results at epoch {current_epoch}: {results}")
+
+        if "epoch" not in self.validation_history:
+            self.validation_history["epoch"] = []
+
+        if current_epoch in self.validation_history["epoch"]:
+            val_idx = self.validation_history["epoch"].index(current_epoch)
+        else:
+            val_idx = len(self.validation_history["epoch"])
+            self.validation_history["epoch"].append(current_epoch)
+
+        last_log = self.state.log_history[-1] if self.state.log_history else {}
+        training_loss = last_log.get("loss", None)
+
+        if "training_loss" not in self.validation_history:
+            self.validation_history["training_loss"] = []
+        
+        if val_idx < len(self.validation_history["training_loss"]):
+            self.validation_history["training_loss"][val_idx] = training_loss
+        else:
+            self.validation_history["training_loss"].append(training_loss)
+
         for metric, value in results["iou_bbox"].items():
             if metric not in self.validation_history["iou_bbox"]:
                 self.validation_history["iou_bbox"][metric] = []
-            self.validation_history["iou_bbox"][metric].append(value)
+            
+            if val_idx < len(self.validation_history["iou_bbox"][metric]):
+                self.validation_history["iou_bbox"][metric][val_idx] = value
+            else:
+                self.validation_history["iou_bbox"][metric].append(value)
 
-        with open("validation_history.json", "w") as f:
+        with open(self.validation_history_file_path, "w") as f:
             json.dump(self.validation_history, f, indent=4)
+
+
+    # Function to clean checkpints
+    def start_checkpoint_cleaner(self, interval_sec=3):
+        try:
+            checkpoints = [d for d in os.listdir(self.output_dir) if d.startswith("checkpoint-")]
+            checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[-1]))
+            if len(checkpoints) > self.save_total_limit:
+                for ckpt_to_remove in checkpoints[:-self.save_total_limit]:
+                    full_path = os.path.join(self.output_dir, ckpt_to_remove)
+                    print(f"[CheckpointCleaner] Removing old checkpoint: {full_path}")
+                    shutil.rmtree(full_path, ignore_errors=True)
+            time.sleep(interval_sec)
+        except Exception as e:
+            print(f"[CheckpointCleaner] Error: {e}")
+            time.sleep(interval_sec)
             
 class EpochActionsCallback(TrainerCallback):
     """
@@ -113,9 +167,10 @@ class EpochActionsCallback(TrainerCallback):
             tqdm.write(f"Pushing model to the hub at epoch {epoch}...")
             self.trainer.push_to_hub(commit_message=f"Checkpoint at epoch {epoch}")
 
-        if epoch % self.every_val == 0:
+        if epoch % self.every_val == 0 and epoch > 0:
             tqdm.write(f"Performing validation at epoch {epoch}...")
             self.trainer.perform_validation()
+            self.trainer.start_checkpoint_cleaner(interval_sec=3)
 
 # Function to find the latest checkpoint
 def get_latest_checkpoint(output_dir):
@@ -129,117 +184,40 @@ def get_latest_checkpoint(output_dir):
     else:
         return None
 
-# Function to clean checkpints
-def start_checkpoint_cleaner(output_dir, save_total_limit, interval_sec=300):
-    def cleaner_loop():
-        while True:
-            try:
-                checkpoints = [d for d in os.listdir(output_dir) if d.startswith("checkpoint-")]
-                checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[-1]))
-                if len(checkpoints) > save_total_limit:
-                    for ckpt_to_remove in checkpoints[:-save_total_limit]:
-                        full_path = os.path.join(output_dir, ckpt_to_remove)
-                        print(f"[CheckpointCleaner] Removing old checkpoint: {full_path}")
-                        shutil.rmtree(full_path, ignore_errors=True)
-                time.sleep(interval_sec)
-            except Exception as e:
-                print(f"[CheckpointCleaner] Error: {e}")
-                time.sleep(interval_sec)
+def plot_single_metric(epochs, values, metric_name, save_path, ylabel="Value"):
+    plt.figure()
+    plt.plot(epochs, values, marker='o')
+    plt.xlabel("Epoch")
+    plt.ylabel(ylabel)
+    plt.title(f"{metric_name} over Epochs")
+    plt.grid(True)
+    plt.savefig(save_path)
+    plt.close()
 
-    cleaner_thread = threading.Thread(target=cleaner_loop, daemon=True)
-    cleaner_thread.start()
 
-# format annotations the same as for training, no need for data augmentation
-def val_formatted_anns(image_id, objects):
-    annotations = []
-    for i in range(0, len(objects["id"])):
-        new_ann = {
-            "id": objects["id"][i],
-            "category_id": objects["category"][i],
-            "iscrowd": 0,   # Assume no crowd annotations
-            "image_id": image_id,
-            "area": objects["area"][i],
-            "bbox": objects["bbox"][i],
-        }
-        annotations.append(new_ann)
-
-    return annotations
-    
-def save_annotation_file_images(dataset, id2label, mode="val"):
-    output_json = {}
-    path_output = f"{os.getcwd()}/output/"
-
-    # Create output directory if it doesn't exist
-    if not os.path.exists(path_output):
-        os.makedirs(path_output)
-
-    # Define annotation file path
-    path_anno = os.path.join(path_output, "boat_ann_val.json" if mode == "val" else "boat_ann_val_real.json")
-    categories_json = [{"supercategory": "none", "id": id, "name": id2label[id]} for id in id2label]
-    output_json["images"] = []
-    output_json["annotations"] = []
-    
-    #Process each example in the dataset
-    for example in dataset:
-        ann = val_formatted_anns(example["image_id"], example["objects"])
-        if not os.path.exists(example["image_path"]):
-            continue
-        image_example = Image.open(example["image_path"])
-        output_json["images"].append(
-            {
-                "id": example["image_id"],
-                "width": image_example.width,
-                "height": image_example.height,
-                "file_name": f"{example['image_id']}.png",
-            }
-        )
-        output_json["annotations"].extend(ann)
-    output_json["categories"] = categories_json
-
-    # Save annotations to JSON file
-    with open(path_anno, "w") as file:
-        json.dump(output_json, file, ensure_ascii=False, indent=4)
-
-    # Save images to the output directory
-    for image_path, img_id in zip(dataset["image_path"], dataset["image_id"]):
-        if not os.path.exists(image_path):
-            continue
-        im = Image.open(image_path)
-        path_img = os.path.join(path_output, f"{img_id}.png")
-        im.save(path_img)
-
-    return path_output, path_anno
-
-class CocoDetection(torchvision.datasets.CocoDetection):
-    def __init__(self, img_folder, feature_extractor, ann_file):
-        super().__init__(img_folder, ann_file)
-        self.feature_extractor = feature_extractor
-
-    def __getitem__(self, idx):
-        img, target = super(CocoDetection, self).__getitem__(idx)
-        image_id = self.ids[idx]
-        target = {"image_id": image_id, "annotations": target}
-        encoding = self.feature_extractor(images=img, annotations=target, return_tensors="pt")
-        pixel_values = encoding["pixel_values"].squeeze()
-        target = encoding["labels"][0]
-        return {"pixel_values": pixel_values, "labels": target}
-
-def plot_validation_history(history_file = "validation_history.json"):
-    # Load validation history from JSON file
-    with open(history_file, "r") as f:
+def plot_validation_history(save_model_dir):
+    # Load validation history
+    with open(os.path.join(save_model_dir, "validation_history.json"), "r") as f:
         history = json.load(f)
 
-    # Plot each metric
-    for metric, values in history["iou_bbox"].items():
-        plt.plot(range(1, len(values) + 1), values, label=metric, marker='o')
+    epochs = history.get("epoch", list(range(1, len(next(iter(history["iou_bbox"].values()))) + 1)))
 
-    plt.xlabel("Epoch")
-    plt.ylabel("Score")
-    plt.title("Validation IoU Metrics Over Epochs")
-    plt.legend()
-    plt.grid(True)
-    plt.savefig("validation_iou_metrics.png")
-    plt.show()
+    # Plot each AP metric
+    iou_dir = os.path.join(save_model_dir, "validation_plots")
+    os.makedirs(iou_dir, exist_ok=True)
+
+    for metric, values in history["iou_bbox"].items():
+        save_path = os.path.join(iou_dir, f"{metric.replace('/', '_')}.png")
+        plot_single_metric(epochs, values, metric, save_path)
+
+    # Plot training loss
+    if "training_loss" in history:
+        save_path = os.path.join(save_model_dir, "training_loss.png")
+        plot_single_metric(epochs, history["training_loss"], "Training Loss", save_path, ylabel="Loss")
+
+    print(f"Validation plots saved to {save_model_dir}")
+
+
 
 def main():
     args = parse_args()
@@ -289,15 +267,13 @@ def main():
         logging_steps=args.logging_steps,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        save_strategy="no",
+        save_strategy="epoch",
         evaluation_strategy="no",
         save_total_limit=1000,
         remove_unused_columns=False,
         push_to_hub=True,
         hub_model_id=f"{args.save_model_hub_id}/{args.save_model_repo_id}",
     )
-
-    start_checkpoint_cleaner(training_args.output_dir, args.save_total_limit, interval_sec=300)
 
     # Initialize Trainer with collate function, etc.
     trainer = CustomTrainer(
@@ -309,6 +285,8 @@ def main():
         data_collator=collate_fn,
         tokenizer=image_processor,
         id2label=dataloader.id2label,
+        output_dir=args.save_model_repo_id,
+        save_total_limit=args.save_total_limit,
     )
 
     trainer.add_callback(EpochActionsCallback(trainer, every_push=args.push_every_n_epochs, every_val=args.validate_every_n_epochs))
@@ -326,18 +304,10 @@ def main():
 
     trainer.push_to_hub(commit_message=f"{args.save_model_repo_id} trained for {args.epoch} epochs")
 
+    plot_validation_history(args.save_model_repo_id)
+
 
 if __name__ == '__main__':
     login(token=os.environ["HUGGINGFACE_TOKEN"])
     main()
 
-    plot_validation_history()
-
-# Usage:
-# python3 train.py --save_model_hub_id ARG-NCTU --save_model_repo_id detr-resnet-50-finetuned-600-epochs-Kaohsiung-Port-dataset --load_model_hub_id facebook --load_model_repo_id detr-resnet-50 --dataset_hub_id ARG-NCTU --dataset_repo_id Kaohsiung_Port_dataset_2024 --dataset_format parquet --epoch 600 --batch_size 8 --learning_rate 1e-5 --weight_decay 1e-4 --logging_steps 50 --save_total_limit 100 --classes_path data/Kaohsiung_Port_classes.txt --image_height 480 --image_width 1920 --device cuda
-
-# python3 train.py --save_model_hub_id ARG-NCTU --save_model_repo_id detr-resnet-50-finetuned-600-epochs-KS-Buoy-dataset --load_model_hub_id facebook --load_model_repo_id detr-resnet-50 --dataset_hub_id ARG-NCTU --dataset_repo_id KS_Buoy_dataset_2025 --dataset_format parquet --epoch 600 --batch_size 8 --learning_rate 1e-5 --weight_decay 1e-4 --logging_steps 50 --save_total_limit 100 --classes_path data/KS_Buoy_classes.txt --image_height 480 --image_width 1920 --device cuda
-
-# python3 train.py --save_model_hub_id ARG-NCTU --save_model_repo_id detr-resnet-50-finetuned-20-epochs-Boat-dataset-0314 --load_model_hub_id facebook --load_model_repo_id detr-resnet-50 --dataset_hub_id ARG-NCTU --dataset_repo_id Boat_dataset_2024 --dataset_format jsonl --epoch 20 --batch_size 8 --learning_rate 1e-5 --weight_decay 1e-4 --logging_steps 50 --save_total_limit 100 --classes_path data/boat_classes.txt --image_height 480 --image_width 640 --device cuda
-
-# python3 train.py --save_model_hub_id ARG-NCTU --save_model_repo_id detr-resnet-50-finetuned-600-epochs-GuardBoat-dataset --load_model_hub_id ARG-NCTU --load_model_repo_id detr-resnet-50-finetuned-20-epochs-boat-dataset --dataset_hub_id ARG-NCTU --dataset_repo_id GuardBoat_dataset_2025 --dataset_format parquet --epoch 600 --batch_size 8 --learning_rate 1e-5 --weight_decay 1e-4 --logging_steps 50 --save_total_limit 100 --classes_path data/GuardBoat_classes.txt --image_height 480 --image_width 1920 --device cuda
