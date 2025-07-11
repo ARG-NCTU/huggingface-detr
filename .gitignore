@@ -36,3 +36,5 @@ bags/
 train-*.sh
 eval-*.sh
 inference-*.sh
+
+validation_history.json
