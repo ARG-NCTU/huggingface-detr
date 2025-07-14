@@ -13,10 +13,14 @@ import cv2
 
 
 class BaseObjectDetectionDataLoader:
-    def __init__(self, dataset_format, image_height, image_width, dataset_hub_id, dataset_repo_id, classes_path):
+    def __init__(self, dataset_format, image_height, image_width, load_model_hub_id, 
+                 load_model_repo_id, dataset_hub_id, 
+                 dataset_repo_id, classes_path):
         self.dataset_format = dataset_format
         self.image_height = image_height
         self.image_width = image_width
+        self.load_model_hub_id = load_model_hub_id
+        self.load_model_repo_id = load_model_repo_id
         self.dataset_hub_id = dataset_hub_id
         self.dataset_repo_id = dataset_repo_id
         self.classes_path = classes_path
@@ -42,15 +46,14 @@ class BaseObjectDetectionDataLoader:
 
     def get_label2id(self):
         return {v: k for k, v in self.get_id2label().items()}
-
-    def get_image_processor(self):
-        raise NotImplementedError("Subclasses must implement this method.")
-
-    def get_transform(self):
-        raise NotImplementedError("Subclasses must implement this method.")
-
-    def get_collate_fn(self):
-        raise NotImplementedError("Subclasses must implement this method.")
+    
+    def load_image(self, image_path):
+        """Load an image from JSONL or Parquet dataset."""
+        try:
+            return np.array(Image.open(image_path).convert("RGB"))[:, :, ::-1]
+        except Exception:
+            print(f"Warning: {image_path} not found, using black placeholder.")
+            return np.zeros((self.image_height, self.image_width, 3), dtype=np.uint8)
 
     def get_dataset(self):
         if self.dataset_format == "jsonl":
@@ -77,33 +80,30 @@ class BaseObjectDetectionDataLoader:
         dataset["train"] = dataset["train"].with_transform(lambda x: self.transform_aug_ann(x))
         return dataset
 
+    def get_collate_fn(self):
+        raise NotImplementedError("Subclasses must implement this method.")
+    
+    def get_transform(self):
+        raise NotImplementedError("Subclasses must implement this method.")
+    
+    def formatted_anns(self, image_id, category, area, bbox):
+        raise NotImplementedError("Subclasses must implement this method.")
+    
+    def get_image_processor(self):
+        raise NotImplementedError("Subclasses must implement this method.")
+    
     def transform_aug_ann(self, examples):
         raise NotImplementedError("Subclasses must implement this method.")
-
-    def get_dataloader(self, batch_size=8):
-        return DataLoader(self.dataset["train"], batch_size=batch_size, shuffle=True, collate_fn=self.collate_fn)
+    
 
 class DETRDataLoader(BaseObjectDetectionDataLoader):
     def __init__(self, dataset_format, image_height=480, image_width=1920, load_model_hub_id="facebook", 
                  load_model_repo_id="detr-resnet-50", dataset_hub_id="ARG-NCTU", 
-                 dataset_repo_id="Kaohsiung_Port_dataset_2024", classes_path="data/classes.txt"):
-        self.load_model_hub_id = load_model_hub_id
-        self.load_model_repo_id = load_model_repo_id
-        super().__init__(dataset_format, image_height, image_width, dataset_hub_id, dataset_repo_id, classes_path)
-
-    def get_image_processor(self):
-        processor = AutoImageProcessor.from_pretrained(f"{self.load_model_hub_id}/{self.load_model_repo_id}")
-        processor.size = {"height": self.image_height, "width": self.image_width}
-        return processor
-
-    def get_transform(self):
-        return A.Compose(
-            [
-                A.HorizontalFlip(p=0.5),
-                A.RandomBrightnessContrast(p=0.5),
-            ],
-            bbox_params=A.BboxParams(format="coco", label_fields=["category"]),
-        )
+                 dataset_repo_id="TW_Marine_5cls_dataset", classes_path="data/TW_Marine_5cls_classes.txt"):
+        
+        super().__init__(dataset_format, image_height, image_width, load_model_hub_id, 
+                 load_model_repo_id, dataset_hub_id, 
+                 dataset_repo_id, classes_path)
 
     def get_collate_fn(self):
         def collate_fn(batch):
@@ -117,6 +117,26 @@ class DETRDataLoader(BaseObjectDetectionDataLoader):
             return batch
         return collate_fn
 
+    def formatted_anns(self, image_id, category, area, bbox):
+        return [
+            {"image_id": image_id, "category_id": category[i], "isCrowd": 0, "area": area[i], "bbox": list(bbox[i])}
+            for i in range(len(category))
+        ]
+    
+    def get_transform(self):
+        return A.Compose(
+            [
+                A.HorizontalFlip(p=0.5),
+                A.RandomBrightnessContrast(p=0.5),
+            ],
+            bbox_params=A.BboxParams(format="coco", label_fields=["category"]),
+        )
+    
+    def get_image_processor(self):
+        processor = AutoImageProcessor.from_pretrained(f"{self.load_model_hub_id}/{self.load_model_repo_id}")
+        processor.size = {"height": self.image_height, "width": self.image_width}
+        return processor
+    
     def transform_aug_ann(self, examples):
         image_ids = examples["image_id"]
         images, bboxes, areas, categories = [], [], [], []
@@ -145,23 +165,13 @@ class DETRDataLoader(BaseObjectDetectionDataLoader):
         return self.image_processor(images=images, annotations=targets, return_tensors="pt")
 
 class YolosDataLoader(BaseObjectDetectionDataLoader):
-    def __init__(self, dataset_format, image_height=480, image_width=1920, dataset_hub_id="ARG-NCTU", 
-                 dataset_repo_id="GuardBoat_dataset_2025", classes_path="data/GuardBoat_classes.txt"):
-        super().__init__(dataset_format, image_height, image_width, dataset_hub_id, dataset_repo_id, classes_path)
-
-    def get_image_processor(self):
-        processor = AutoImageProcessor.from_pretrained("hustvl/yolos-tiny")
-        processor.size = {"height": self.image_height, "width": self.image_width}
-        return processor
-
-    def get_transform(self):
-        return A.Compose(
-            [
-                A.HorizontalFlip(p=0.5),
-                A.RandomBrightnessContrast(p=0.5),
-            ],
-            bbox_params=A.BboxParams(format="coco", label_fields=["category"]),
-        )
+    def __init__(self, dataset_format, image_height=480, image_width=1920, load_model_hub_id="hustvl", 
+                 load_model_repo_id="yolos-tiny", dataset_hub_id="ARG-NCTU", 
+                 dataset_repo_id="TW_Marine_5cls_dataset", classes_path="data/TW_Marine_5cls_classes.txt"):
+        
+        super().__init__(dataset_format, image_height, image_width, load_model_hub_id, 
+                 load_model_repo_id, dataset_hub_id, 
+                 dataset_repo_id, classes_path)
 
     def get_collate_fn(self):
         def collate_fn(batch):
@@ -173,6 +183,29 @@ class YolosDataLoader(BaseObjectDetectionDataLoader):
             }
             return batch
         return collate_fn
+    
+    def formatted_anns(self, image_id, category, area, bbox, obj_id):
+        return [
+            {"image_id": image_id, "object_id": obj_id[i], "category_id": category[i], "isCrowd": 0, "area": area[i], "bbox": list(bbox[i])}
+            for i in range(len(category))
+        ]
+    
+    def get_transform(self):
+        return A.Compose(
+            [
+                A.SmallestMaxSize(max_size=800),
+                A.PadIfNeeded(min_height=800, min_width=1333, border_mode=0, value=(0,0,0)),
+                # A.Resize(800, 1333, interpolation=cv2.INTER_LINEAR),
+                A.HorizontalFlip(p=0.5),
+                A.RandomBrightnessContrast(p=0.5),
+            ],
+            bbox_params=A.BboxParams(format="coco", label_fields=["category"]),
+        )
+    
+    def get_image_processor(self):
+        processor = AutoImageProcessor.from_pretrained(f"{self.load_model_hub_id}/{self.load_model_repo_id}")
+        processor.size = {"height": 800, "width": 1333}
+        return processor
 
     def transform_aug_ann(self, examples):
         image_ids = examples["image_id"]
@@ -194,15 +227,14 @@ class YolosDataLoader(BaseObjectDetectionDataLoader):
             obj_ids.append(objects["id"])
 
         targets = [
-            {"annotations": self.formatted_anns(id_, cat_, ar_, box_, oid_)}
+            {
+                "image_id": id_,
+                "annotations": self.formatted_anns(id_, cat_, ar_, box_, oid_)
+            }
             for id_, cat_, ar_, box_, oid_ in zip(image_ids, categories, areas, bboxes, obj_ids)
         ]
 
-        processed = self.image_processor(images=images, annotations=targets, return_tensors="pt")
-        return {
-            "pixel_values": processed["pixel_values"],
-            "labels": processed["labels"]
-        }
+        return self.image_processor(images=images, annotations=targets, return_tensors="pt")
 
 def parse_args():
     parser = argparse.ArgumentParser(description='DETR DataLoader Augmentation Visualization')

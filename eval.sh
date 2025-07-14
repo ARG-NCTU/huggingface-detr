@@ -1,6 +1,7 @@
 #!/bin/bash
 
 python3 eval.py \
+    --model_type detr \
     --hub_id ARG-NCTU \
     --repo_id detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset \
     --dataset_hub_id ARG-NCTU \

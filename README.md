@@ -106,6 +106,7 @@ cd ~/huggingface-detr/
 
 ```bash
 python3 train.py \
+--model_type detr \
 --save_model_hub_id ARG-NCTU \
 --save_model_repo_id detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset \
 --load_model_hub_id ARG-NCTU \
@@ -150,9 +151,10 @@ This project supports training and fine-tuning with the following pretrained mod
 
 You can specify the pretrained model to load with the arguments:
 ```bash
+--model_type <model type, options:("detr", "yolos")> \
 --load_model_hub_id <HuggingFace hub org/user> \
 --load_model_repo_id <model repo name>
-
+```
 
 Use tensorboard to see training logs
 
@@ -173,6 +175,7 @@ detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset \
 
 ```bash
 python3 eval.py \
+--model_type detr \
 --hub_id ARG-NCTU \
 --repo_id detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset \
 --dataset_hub_id ARG-NCTU \

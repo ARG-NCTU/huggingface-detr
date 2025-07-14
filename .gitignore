@@ -1,11 +1,8 @@
 data/
 images*/
 images.zip
-data_boat/
-extracted_image/
-dgx_gpu_flat.tar
-dgx_gpu.sqsh
-detr-resnet-50-finetuned-20-epochs-boat-dataset/
+detr-*/
+yolos-*/
 output/
 visualize_anno.jpg
 visualize_aug.png

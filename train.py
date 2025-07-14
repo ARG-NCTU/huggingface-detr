@@ -1,7 +1,8 @@
 import argparse
 import torch
 from transformers import AutoModelForObjectDetection, TrainingArguments, Trainer, AutoImageProcessor, TrainerCallback, TrainingArguments
-from dataloader import DETRDataLoader
+from transformers import YolosConfig, YolosForObjectDetection
+from dataloader import DETRDataLoader, YolosDataLoader
 import os
 import shutil
 import threading
@@ -19,6 +20,9 @@ from eval import save_annotation_file_images, val_formatted_anns, CocoDetection
 def parse_args():
     parser = argparse.ArgumentParser(description='Train DETR model with a custom dataset.')
     
+    # Model Selection
+    parser.add_argument('--model_type', type=str, default='detr', help='Model type to use for training (e.g., detr, yolos, etc.)')
+
     # Model save/load parameters
     parser.add_argument('--save_model_hub_id', type=str, default='ARG-NCTU', help='Save model to Hugging Face Hub ID')
     parser.add_argument('--save_model_repo_id', type=str, default='detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset', help='Save model to Hugging Face repository ID')
@@ -29,7 +33,7 @@ def parse_args():
     parser.add_argument('--dataset_hub_id', type=str, default='ARG-NCTU', help='Dataset Hugging Face Hub ID')
     parser.add_argument('--dataset_repo_id', type=str, default='TW_Marine_5cls_dataset', help='Dataset Hugging Face repository ID')
     parser.add_argument('--dataset_format', type=str, choices=['jsonl', 'parquet'], default='parquet', help='Dataset format')
-
+    
     # Training parameters
     parser.add_argument('--epoch', type=int, default=600, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=2, help='Batch size for training')
@@ -52,7 +56,8 @@ def parse_args():
 
 # Custom Trainer class to handle custom push logic
 class CustomTrainer(Trainer):
-    def __init__(self, *args, val_coco_dataset=None, image_processor=None, id2label=None, output_dir=None, save_total_limit=None, **kwargs):
+    def __init__(self, *args, model_type='detr', val_coco_dataset=None, image_processor=None, id2label=None, output_dir=None, save_total_limit=None, **kwargs):
+        self.model_type = model_type
         self.val_coco_dataset = val_coco_dataset
         self.image_processor = image_processor
         self.id2label = id2label
@@ -88,7 +93,10 @@ class CustomTrainer(Trainer):
         with torch.no_grad():
             for batch in tqdm(val_dataloader):
                 batch = {k: v.to(self.args.device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
-                outputs = self.model(pixel_values=batch["pixel_values"], pixel_mask=batch["pixel_mask"])
+                if self.model_type == 'detr':
+                    outputs = self.model(pixel_values=batch["pixel_values"], pixel_mask=batch["pixel_mask"])
+                elif self.model_type == 'yolos':
+                    outputs = self.model(pixel_values=batch["pixel_values"])
                 orig_target_sizes = torch.stack([target["orig_size"] for target in batch["labels"]], dim=0)
                 results = self.image_processor.post_process(outputs, orig_target_sizes)
                 module.add(prediction=results, reference=batch["labels"])
@@ -222,17 +230,29 @@ def plot_validation_history(save_model_dir):
 def main():
     args = parse_args()
 
-    # Initialize dataset using the `DataLoader` class
-    dataloader = DETRDataLoader(
-        dataset_format=args.dataset_format,
-        image_height=args.image_height,
-        image_width=args.image_width,
-        load_model_hub_id=args.load_model_hub_id,
-        load_model_repo_id=args.load_model_repo_id,
-        dataset_hub_id=args.dataset_hub_id,
-        dataset_repo_id=args.dataset_repo_id,
-        classes_path=args.classes_path,
-    )
+    # Initialize dataset using the appropriate DataLoader based on the model type
+    if args.model_type == 'detr':
+        dataloader = DETRDataLoader(
+            dataset_format=args.dataset_format,
+            image_height=args.image_height,
+            image_width=args.image_width,
+            load_model_hub_id=args.load_model_hub_id,
+            load_model_repo_id=args.load_model_repo_id,
+            dataset_hub_id=args.dataset_hub_id,
+            dataset_repo_id=args.dataset_repo_id,
+            classes_path=args.classes_path,
+        )
+    elif args.model_type == 'yolos':
+        dataloader = YolosDataLoader(
+            dataset_format=args.dataset_format,
+            image_height=args.image_height,
+            image_width=args.image_width,
+            load_model_hub_id=args.load_model_hub_id,
+            load_model_repo_id=args.load_model_repo_id,
+            dataset_hub_id=args.dataset_hub_id,
+            dataset_repo_id=args.dataset_repo_id,
+            classes_path=args.classes_path,
+        )
 
     # Get dataset, collate function, and image processor
     train_dataset = dataloader.dataset["train"]
@@ -255,7 +275,10 @@ def main():
     )
 
     # Set correct image size for DETR
-    model.config.image_size = (args.image_height, args.image_width)  
+    if args.model_type == 'detr':
+        model.config.image_size = (args.image_height, args.image_width)
+    elif args.model_type == 'yolos':
+        model.config.image_size = (800, 1333)
 
     # Training arguments
     training_args = TrainingArguments(
@@ -280,6 +303,7 @@ def main():
         model=model,
         args=training_args,
         train_dataset=train_dataset,
+        model_type=args.model_type,
         val_coco_dataset=val_coco_dataset,
         image_processor=image_processor,
         data_collator=collate_fn,

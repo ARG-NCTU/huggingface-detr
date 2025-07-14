@@ -7,13 +7,16 @@ from transformers import AutoImageProcessor, AutoModelForObjectDetection
 from PIL import Image
 from tqdm import tqdm
 import evaluate
-from dataloader import DETRDataLoader
+from dataloader import DETRDataLoader, YolosDataLoader
 import os
 from huggingface_hub import login
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Evaluate DETR model with a custom dataset.')
     
+    # Model Selection
+    parser.add_argument('--model_type', type=str, default='detr', help='Model type to use for training (e.g., detr, yolos, etc.)')
+
     # Model save/load parameters
     parser.add_argument('--hub_id', type=str, default='ARG-NCTU', help='Hugging Face Hub ID')
     parser.add_argument('--repo_id', type=str, default='detr-resnet-50-finetuned-600-epochs-TW-Marine-5cls-dataset', help='Model repository ID')
@@ -111,43 +114,49 @@ class CocoDetection(torchvision.datasets.CocoDetection):
 
 def main():
     args = parse_args()
-    dataloader = DETRDataLoader(
-        dataset_format=args.dataset_format,
-        image_height=args.image_height,
-        image_width=args.image_width,
-        dataset_hub_id=args.dataset_hub_id,
-        dataset_repo_id=args.dataset_repo_id,
-        classes_path=args.classes_path,
-    )
+    if args.model_type == 'detr':
+        dataloader = DETRDataLoader(
+            dataset_format=args.dataset_format,
+            image_height=args.image_height,
+            image_width=args.image_width,
+            dataset_hub_id=args.dataset_hub_id,
+            dataset_repo_id=args.dataset_repo_id,
+            classes_path=args.classes_path,
+        )
+    elif args.model_type == 'yolos':
+        dataloader = YolosDataLoader(
+            dataset_format=args.dataset_format,
+            image_height=args.image_height,
+            image_width=args.image_width,
+            dataset_hub_id=args.dataset_hub_id,
+            dataset_repo_id=args.dataset_repo_id,
+            classes_path=args.classes_path,
+        )
     if args.dataset_choice == 'val':
         eval_dataset = dataloader.dataset["validation"]
     else:
         eval_dataset = dataloader.dataset["test"]
     collate_fn = dataloader.collate_fn
-    im_processor = AutoImageProcessor.from_pretrained(f"{args.hub_id}/{args.repo_id}")
+    image_processor = AutoImageProcessor.from_pretrained(f"{args.hub_id}/{args.repo_id}")
     path_output, path_anno = save_annotation_file_images(eval_dataset, dataloader.id2label)
-    test_ds_coco_format = CocoDetection(path_output, im_processor, path_anno)
-    model = AutoModelForObjectDetection.from_pretrained(f"{args.hub_id}/{args.repo_id}").to(args.device)
+    test_ds_coco_format = CocoDetection(path_output, image_processor, path_anno)
+    model = AutoModelForObjectDetection.from_pretrained(f"{args.hub_id}/{args.repo_id}").to(args.device).eval()
     module = evaluate.load("ybelkada/cocoevaluate", coco=test_ds_coco_format.coco)
     val_dataloader = torch.utils.data.DataLoader(
         test_ds_coco_format, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, collate_fn=collate_fn
     )
     # Perform evaluation
     with torch.no_grad():
-        for idx, batch in enumerate(tqdm(val_dataloader)):
+        for batch in tqdm(val_dataloader):
             batch = {k: v.to(args.device) if isinstance(v, torch.Tensor) else v for k, v in batch.items()}
-            pixel_values = batch["pixel_values"]
-            pixel_mask = batch["pixel_mask"]
-            labels = batch["labels"]
+            if args.model_type == 'detr':
+                outputs = model(pixel_values=batch["pixel_values"], pixel_mask=batch["pixel_mask"])
+            elif args.model_type == 'yolos':
+                outputs = model(pixel_values=batch["pixel_values"])
+            orig_target_sizes = torch.stack([target["orig_size"] for target in batch["labels"]], dim=0)
+            results = image_processor.post_process(outputs, orig_target_sizes)
+            module.add(prediction=results, reference=batch["labels"])
             
-            # forward pass
-            outputs = model(pixel_values=pixel_values, pixel_mask=pixel_mask)
-    
-            orig_target_sizes = torch.stack([target["orig_size"] for target in labels], dim=0)
-            results = im_processor.post_process(outputs, orig_target_sizes)  # convert outputs of model to COCO api
-    
-            module.add(prediction=results, reference=labels)
-            del batch
     # Compute and print evaluation results
     results = module.compute()
     print(results)
