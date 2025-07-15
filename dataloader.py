@@ -193,7 +193,7 @@ class YolosDataLoader(BaseObjectDetectionDataLoader):
     def get_transform(self):
         return A.Compose(
             [
-                A.SmallestMaxSize(max_size=800),
+                A.LongestMaxSize(max_size=1333),
                 A.PadIfNeeded(min_height=800, min_width=1333, border_mode=0, value=(0,0,0)),
                 # A.Resize(800, 1333, interpolation=cv2.INTER_LINEAR),
                 A.HorizontalFlip(p=0.5),
