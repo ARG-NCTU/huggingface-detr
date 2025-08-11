@@ -69,6 +69,9 @@ class DetrInference2DMarkersNode:
         self.last_detection_time = time.time()
         self.marker_delete_timer = rospy.Timer(rospy.Duration(0.5), self.check_detection_timeout)
 
+        self.last_seq = None
+        self.last_stamp = None
+        self.last_image_shape = None
 
     def get_fixed_color_for_id(self, obj_id):
         return self.fixed_id_colors[obj_id % 4]
@@ -242,6 +245,23 @@ class DetrInference2DMarkersNode:
                 except CvBridgeError as e:
                     rospy.loginfo('CvBridgeError while converting back: %s', e)
 
+            if self.last_image_shape and (cv_image.shape[1], cv_image.shape[0]) != self.last_image_shape:
+                rospy.logwarn("Image size changed; resetting tracker.")
+                self.reset_tracker()
+            self.last_image_shape = (cv_image.shape[1], cv_image.shape[0])
+
+            if msg.header is not None:
+                if self.last_seq is not None and msg.header.seq < self.last_seq:
+                    rospy.logwarn("Header seq decreased; bag likely restarted. Resetting tracker.")
+                    self.reset_tracker()
+                self.last_seq = msg.header.seq
+
+                if self.last_stamp is not None and msg.header.stamp < self.last_stamp:
+                    rospy.logwarn("Header stamp went backwards; resetting tracker.")
+                    self.reset_tracker()
+                self.last_stamp = msg.header.stamp
+
+
     def check_detection_timeout(self, event):
         if time.time() - self.last_detection_time > self.timeout_no_detection:
             rospy.logwarn("Too long without detection — sending DELETEALL marker.")
@@ -251,6 +271,11 @@ class DetrInference2DMarkersNode:
             marker_array.markers.append(delete_marker)
             self.pub_marker_array.publish(marker_array)
 
+    def reset_tracker(self):
+        self.previous_objects.clear()
+        self.tracked_ids_in_this_frame.clear()
+        self.id_counter = 0
+        rospy.logwarn("Tracker reset.")
 
     @staticmethod
     def compute_iou(box1, box2):
@@ -323,7 +348,23 @@ class DetrInference2DMarkersNode:
                 cost_matrix[i, j] = cost
 
         if np.all(np.isinf(cost_matrix)):
-            rospy.loginfo("All costs are inf — skipping matching for this frame.")
+            rospy.loginfo("All costs are inf — fallback: assign new IDs for current boxes.")
+            for (cx, cy, info) in curr_boxes:
+                new_id = self.get_next_available_id()
+                if new_id == -1:
+                    continue
+                score, class_name, box = info
+                matched_result.append((new_id, score, class_name, box))
+                self.previous_objects[new_id] = {
+                    'kf': self.create_kalman_filter(cx, cy),
+                    'last_seen_time': time.time(),
+                    'box': box
+                }
+                self.tracked_ids_in_this_frame.add(new_id)
+
+            for obj_id in list(self.previous_objects.keys()):
+                if obj_id not in self.tracked_ids_in_this_frame:
+                    del self.previous_objects[obj_id]
             return matched_result
 
         row_ind, col_ind = linear_sum_assignment(cost_matrix)
